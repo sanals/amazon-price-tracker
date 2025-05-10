@@ -25,7 +25,7 @@ class UserRepositoryTest {
         User user = new User();
         user.setUsername("testuser");
         user.setEmail("test@example.com");
-        user.setPasswordHash("hashedpassword");
+        user.setPassword("hashedpassword");
 
         // When
         User savedUser = userRepository.save(user);
@@ -42,7 +42,7 @@ class UserRepositoryTest {
         User user = new User();
         user.setUsername("testuser");
         user.setEmail("test@example.com");
-        user.setPasswordHash("hashedpassword");
+        user.setPassword("hashedpassword");
         User savedUser = entityManager.persist(user);
         entityManager.flush();
 
@@ -60,7 +60,7 @@ class UserRepositoryTest {
         User user = new User();
         user.setUsername("testuser");
         user.setEmail("test@example.com");
-        user.setPasswordHash("hashedpassword");
+        user.setPassword("hashedpassword");
         entityManager.persist(user);
         entityManager.flush();
 
@@ -78,7 +78,7 @@ class UserRepositoryTest {
         User user = new User();
         user.setUsername("testuser");
         user.setEmail("test@example.com");
-        user.setPasswordHash("hashedpassword");
+        user.setPassword("hashedpassword");
         entityManager.persist(user);
         entityManager.flush();
 
@@ -96,7 +96,7 @@ class UserRepositoryTest {
         User user = new User();
         user.setUsername("testuser");
         user.setEmail("test@example.com");
-        user.setPasswordHash("hashedpassword");
+        user.setPassword("hashedpassword");
         entityManager.persist(user);
         entityManager.flush();
 
@@ -113,7 +113,7 @@ class UserRepositoryTest {
         User user = new User();
         user.setUsername("testuser");
         user.setEmail("test@example.com");
-        user.setPasswordHash("hashedpassword");
+        user.setPassword("hashedpassword");
         entityManager.persist(user);
         entityManager.flush();
 

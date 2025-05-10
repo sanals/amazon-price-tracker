@@ -39,7 +39,7 @@ public class PriceCheckScheduler {
     @Value("${app.notification.cooldown-hours:24}")
     private long notificationCooldownHours;
     
-    @Scheduled(fixedRateString = "${app.scheduling.checkRateMs:3600000}")
+    @Scheduled(fixedRateString = "${app.scheduling.checkRateMs:30000}")
     @Transactional
     public void checkPrices() {
         log.info("Starting scheduled price check");

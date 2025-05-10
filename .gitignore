@@ -67,3 +67,4 @@ application-*.properties
 # Ignore reference files
 reference_pom_file.xml
 reference_application.yml 
+test.html

@@ -12,7 +12,7 @@ domain_models:
     id: Long (Primary Key, @Id, @GeneratedValue)
     username: String (Unique, @Column(unique=true, nullable=false))
     email: String (Unique, @Column(unique=true, nullable=false))
-    passwordHash: String (@Column(nullable=false))
+    password: String (@Column(nullable=false))
     roles: Set<String> (e.g., @ElementCollection(fetch = FetchType.EAGER)) # Or separate Role entity
     enabled: Boolean (@Column(nullable=false, columnDefinition = "boolean default true"))
     createdAt: Instant (@CreatedDate)

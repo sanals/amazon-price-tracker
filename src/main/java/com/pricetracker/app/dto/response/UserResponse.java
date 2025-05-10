@@ -6,5 +6,7 @@ package com.pricetracker.app.dto.response;
 public record UserResponse(
     Long id,
     String username,
-    String email
+    String email,
+    String role,
+    String status
 ) {} 

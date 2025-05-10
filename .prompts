@@ -145,7 +145,7 @@ Based on `15-domain-models-dtos.yml` and `06-database.yml`, define the following
     - `id` (Long, PK, GeneratedValue)
     - `username` (String, unique, not null)
     - `email` (String, unique, not null)
-    - `passwordHash` (String, not null) - We'll add this now, but won't use it until the Security phase.
+    - `password` (String, not null) - We'll add this now, but won't use it until the Security phase.
 2.  **`Product.java`:**
     - `id` (Long, PK, GeneratedValue)
     - `productUrl` (String, unique, not null, indexed, consider length e.g., 1024)
@@ -230,7 +230,7 @@ Create the initial Liquibase changelog files:
             <column name="email" type="varchar(100)">
                 <constraints unique="true" nullable="false"/>
             </column>
-            <column name="password_hash" type="varchar(255)">
+            <column name="password" type="varchar(255)">
                 <constraints nullable="false"/>
             </column>
             <column name="created_at" type="timestamp with time zone" defaultValueComputed="CURRENT_TIMESTAMP">
@@ -526,7 +526,7 @@ Create `ProductTrackingControllerTest.java` in `src/test/java/com.pricetracker.a
     - `io.jsonwebtoken:jjwt-api`
     - `io.jsonwebtoken:jjwt-impl`
     - `io.jsonwebtoken:jjwt-jackson`
-2.  Add JWT configuration properties to `application.yml` under an `api.jwt` section, based on `10-configuration-rules.yml`:
+2.  Add JWT configuration properties to `application.yml` under an `api.jwt` section, based on `08-configuration-rules.mdc`:
     - `secret-key`: Use a placeholder like `${JWT_SECRET_KEY:YourDefaultSecretKeyNeedsToBeLongAndSecure}` (Use environment variables in real deployments!).
     - `access-token-expiration-ms`: e.g., 3600000 (1 hour)
     - `refresh-token-expiration-ms`: e.g., 604800000 (7 days) - If implementing refresh tokens.
@@ -544,7 +544,7 @@ Create `ProductTrackingControllerTest.java` in `src/test/java/com.pricetracker.a
     - Inject `UserRepository`.
     - Implement the `loadUserByUsername(String username)` method:
         - Find the user by username using `userRepository`. Throw `UsernameNotFoundException` if not found.
-        - Create and return a `org.springframework.security.core.userdetails.User` object using the found user's username, passwordHash, enabled status, and map the roles Set to `GrantedAuthority` objects (e.g., `user.getRoles().stream().map(SimpleGrantedAuthority::new).collect(Collectors.toList())`).
+        - Create and return a `org.springframework.security.core.userdetails.User` object using the found user's username, password, enabled status, and map the roles Set to `GrantedAuthority` objects (e.g., `user.getRoles().stream().map(SimpleGrantedAuthority::new).collect(Collectors.toList())`).
 ```
 
 **Prompt 19: Implement JWT Service**

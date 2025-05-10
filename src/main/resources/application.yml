@@ -1,5 +1,5 @@
 server:
-  port: 8091
+  port: 8090
   servlet:
     context-path: /api/v1
 
@@ -51,13 +51,45 @@ logging:
 
 # App-specific configurations
 app:
+  base-url: http://localhost:8090/api/v1
   scheduling:
-    checkRateMs: 3600000  # 1 hour in milliseconds
+    checkRateMs: 30000  # 1 minute in milliseconds
   scraper:
     default-delay-ms: 1000  # 1 second delay between requests
     user-agent: "PriceTrackerBot/1.0 (+http://pricetracker.example.com/bot-info)"
   notification:
     cooldown-hours: 24  # Set a 24-hour cooldown between notifications for the same product/user
+
+# JWT Configuration
+api:
+  jwt:
+    secret-key: VeryLongSecretKeyForJwtSigningThatIsAtLeastThirtyTwoCharactersLong0123456789
+    access-token-expiration-ms: 3600000  # 1 hour
+    refresh-token-expiration-ms: 604800000  # 7 days
+
+# Additional JWT configuration used by RefreshTokenServiceImpl
+jwt:
+  secret: VeryLongSecretKeyForJwtSigningThatIsAtLeastThirtyTwoCharactersLong0123456789
+  expiration: 3600000  # 1 hour
+  refresh-token:
+    expiration: 604800000  # 7 days
+    storage: database
+
+# CORS Configuration
+cors:
+  allowed-origins:
+    - http://localhost:3000
+  allowed-methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  allowed-headers:
+    - Authorization
+    - Content-Type
+    - X-Requested-With
+  max-age: 3600
 
 springdoc:
   api-docs:

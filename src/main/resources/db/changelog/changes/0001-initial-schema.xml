@@ -17,7 +17,7 @@
             <column name="email" type="varchar(100)">
                 <constraints unique="true" nullable="false"/>
             </column>
-            <column name="password_hash" type="varchar(255)">
+            <column name="password" type="varchar(255)">
                 <constraints nullable="false"/>
             </column>
             <column name="created_at" type="timestamp with time zone" defaultValueComputed="CURRENT_TIMESTAMP">
