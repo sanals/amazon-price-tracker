@@ -100,7 +100,6 @@ public class PriceCheckScheduler {
             product.getId(), product.getLastCheckedPrice(), newPrice);
         
         // Update product's last checked price
-        BigDecimal oldPrice = product.getLastCheckedPrice();
         product.setLastCheckedPrice(newPrice);
         productRepository.save(product);
         
