@@ -1,0 +1,98 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Spring Boot Specifics (General)
+# Priority: Combined Rules
+spring_boot_general:
+  starters: Use Spring Boot starters extensively (`spring-boot-starter-web`, `data-jpa`, `security`, `mail`, `validation`, `test`).
+  annotations:
+    general: Implement proper annotation usage (`@SpringBootApplication`, `@RestController`, `@Service`, `@Repository`, `@Configuration`, `@Value`, `@Scheduled`).
+    dependency_injection: Prefer constructor injection over `@Autowired` on fields.
+  auto_configuration: Leverage auto-configuration effectively but provide custom beans when necessary (`@Bean` in `@Configuration` classes).
+  configuration_properties: Use `@ConfigurationProperties` for type-safe binding of configuration values to Java objects. See configuration.yml.
+
+# API Documentation
+# Priority: Combined Rules
+api_documentation:
+  tool: Use Springdoc OpenAPI (`springdoc-openapi-starter-webmvc-ui`).
+  annotations: Annotate controllers (`@Operation`, `@Parameter`, `@ApiResponses`) and DTOs (`@Schema`) for clear and automatically generated documentation.
+  access:
+    swagger_ui: Access interactive documentation via `/swagger-ui.html` (or path configured in `configuration.yml`).
+    api_docs: Access OpenAPI specification JSON/YAML via `/api-docs` (or path configured in `configuration.yml`).
+
+# --- IV. API ENDPOINTS REQUIRED ---
+api_endpoints:
+  base_path: /api/v1 # Configured in application.yml
+  authentication: # (Controller: AuthController)
+    register:
+      method: POST
+      path: /auth/register
+      description: Register a new user.
+      request_body: RegisterRequest
+      response: ApiResponse<UserResponse> (Status: 201 Created or 400 Bad Request)
+    login:
+      method: POST
+      path: /auth/login
+      description: Authenticate user, return JWT.
+      request_body: LoginRequest
+      response: ApiResponse<AuthResponse> (Status: 200 OK or 401 Unauthorized)
+    refresh_token: # (If implemented)
+      method: POST
+      path: /auth/refresh-token
+      description: Refresh JWT using refresh token.
+      request_body: RefreshTokenRequest
+      response: ApiResponse<RefreshTokenResponse> (Status: 200 OK or 401 Unauthorized)
+    logout: # (If implemented - requires Authentication)
+      method: POST
+      path: /auth/logout
+      description: Invalidate refresh token.
+      response: ApiResponse<String> (Status: 200 OK)
+  product_tracking: # (Controller: ProductTrackingController - Requires Authentication)
+    add_tracking:
+      method: POST
+      path: /track
+      description: Add a new product URL to track for the logged-in user.
+      request_body: TrackProductRequest
+      response: ApiResponse<TrackedProductResponse> (Status: 201 Created or 400 Bad Request)
+    get_all_tracked:
+      method: GET
+      path: /track
+      description: Get all tracked products for the logged-in user (Paginated).
+      parameters: page, size, sort (e.g., ?page=0&size=10&sort=createdAt,desc)
+      response: ApiResponse<Page<TrackedProductResponse>> (Status: 200 OK)
+    get_tracked_by_id:
+      method: GET
+      path: /track/{trackedProductId}
+      description: Get details of a specific tracked product.
+      path_variables: trackedProductId (Long)
+      response: ApiResponse<TrackedProductResponse> (Status: 200 OK or 404 Not Found)
+    update_tracked:
+      method: PUT # or PATCH if partial updates are strictly needed
+      path: /track/{trackedProductId}
+      description: Update desired price or notification status.
+      path_variables: trackedProductId (Long)
+      request_body: UpdateTrackedProductRequest
+      response: ApiResponse<TrackedProductResponse> (Status: 200 OK or 404 Not Found)
+    delete_tracked:
+      method: DELETE
+      path: /track/{trackedProductId}
+      description: Stop tracking a product.
+      path_variables: trackedProductId (Long)
+      response: ApiResponse<Void> or ApiResponse<String> (Status: 204 No Content or 200 OK with message)
+    get_price_history:
+      method: GET
+      path: /track/product/{productId}/history # Note: Requires access check (is user tracking this product?) or make public if intended.
+      description: Get price history for a specific product (Paginated).
+      path_variables: productId (Long)
+      parameters: page, size, sort (e.g., ?page=0&size=20&sort=timestamp,desc)
+      response: ApiResponse<Page<PriceHistoryResponse>> (Status: 200 OK or 404 Not Found)
+  health: # (Controller: HealthController - Optional, or rely on Actuator)
+    check:
+      method: GET
+      path: /health
+      description: Basic health check (custom endpoint).
+
+
+      response: ApiResponse<String> (Status: 200 OK) # Or use Actuator's /actuator/health

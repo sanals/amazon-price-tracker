@@ -1,0 +1,73 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# --- III. DOMAIN MODELS & DTOS ---
+
+# Domain Models (Entities in com.pricetracker.app.entity)
+domain_models:
+  auditing: Implement Auditable base class/interface if desired. See database.yml.
+  User:
+    id: Long (Primary Key, @Id, @GeneratedValue)
+    username: String (Unique, @Column(unique=true, nullable=false))
+    email: String (Unique, @Column(unique=true, nullable=false))
+    passwordHash: String (@Column(nullable=false))
+    roles: Set<String> (e.g., @ElementCollection(fetch = FetchType.EAGER)) # Or separate Role entity
+    enabled: Boolean (@Column(nullable=false, columnDefinition = "boolean default true"))
+    createdAt: Instant (@CreatedDate)
+    updatedAt: Instant (@LastModifiedDate)
+  Product:
+    id: Long (Primary Key)
+    productUrl: String (Unique, Indexed, @Column(unique=true, nullable=false, length=1024)) # Length might need adjustment
+    name: String (@Column(nullable=false))
+    imageUrl: String (Optional, @Column(length=1024))
+    lastCheckedPrice: BigDecimal (Optional, @Column(precision=10, scale=2)) # Adjust precision/scale as needed
+    createdAt: Instant (@CreatedDate)
+    updatedAt: Instant (@LastModifiedDate)
+  TrackedProduct:
+    id: Long (Primary Key)
+    user: User (@ManyToOne(fetch=FetchType.LAZY), @JoinColumn(name="user_id", nullable=false), Indexed)
+    product: Product (@ManyToOne(fetch=FetchType.LAZY), @JoinColumn(name="product_id", nullable=false), Indexed)
+    desiredPrice: BigDecimal (@Column(nullable=false, precision=10, scale=2))
+    notificationEnabled: Boolean (@Column(nullable=false, columnDefinition = "boolean default true"))
+    lastNotifiedAt: Instant (Optional)
+    createdAt: Instant (@CreatedDate)
+    updatedAt: Instant (@LastModifiedDate)
+    constraints: Unique combination of user_id and product_id (@Table uniqueConstraints).
+  PriceHistory:
+    id: Long (Primary Key)
+    product: Product (@ManyToOne(fetch=FetchType.LAZY), @JoinColumn(name="product_id", nullable=false), Indexed)
+    price: BigDecimal (@Column(nullable=false, precision=10, scale=2))
+    timestamp: Instant (@Column(nullable=false), Indexed) # Should default to now on creation
+  Alert: # (Optional, for logging sent alerts)
+    id: Long (Primary Key)
+    trackedProduct: TrackedProduct (@ManyToOne(fetch=FetchType.LAZY))
+    message: String (@Column(length=500))
+    status: Enum (SENT, FAILED) # (@Enumerated(EnumType.STRING))
+    timestamp: Instant
+  RefreshToken: # (If implementing refresh tokens)
+    id: Long (Primary Key)
+    token: String (Unique, Indexed, @Column(unique=true, nullable=false))
+    user: User (@OneToOne or @ManyToOne, @JoinColumn(name="user_id", nullable=false))
+    expiryDate: Instant (@Column(nullable=false))
+    isRevoked: Boolean (@Column(nullable=false, columnDefinition = "boolean default false"))
+
+# Data Transfer Objects (DTOs in com.pricetracker.app.dto)
+# Recommendation: Use Java Records where appropriate.
+data_transfer_objects:
+  request_dtos:
+    RegisterRequest: (username, email, password) # Add validation annotations
+    LoginRequest: (username, password) # Add validation annotations
+    TrackProductRequest: (productUrl, desiredPrice) # Add validation annotations
+    UpdateTrackedProductRequest: (desiredPrice, notificationEnabled) # Optional fields, add validation
+    RefreshTokenRequest: (refreshToken) # If implemented
+  response_dtos:
+    ApiResponse<T>: (status, code, message, data, timestamp) # Defined in api-design.yml
+    AuthResponse: (accessToken, refreshToken?, userId, username, email, roles)
+    UserResponse: (userId, username, email)
+    ProductResponse: (productId, productUrl, name, imageUrl, lastCheckedPrice, createdAt, updatedAt)
+    TrackedProductResponse: (id, product: ProductResponse, desiredPrice, notificationEnabled, createdAt, updatedAt)
+    PriceHistoryResponse: (id, price, timestamp)
+
+    RefreshTokenResponse: (newAccessToken) # If implemented

@@ -1,0 +1,27 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Web Scraping Rules (Implementation: ScraperService)
+# Priority: Combined Rules (Crucially uses Jsoup)
+scraping:
+  library: Must use the Jsoup library (`org.jsoup:jsoup`) for fetching and parsing HTML. See `build-dependencies.yml`.
+  implementation: Implement scraping logic within dedicated service(s) (e.g., `ScraperService`).
+  functionality:
+    - Implement `scrapePrice(String productUrl)`: Fetches HTML, parses it using CSS selectors to extract the current price. Return `BigDecimal` or null/Optional.empty() on failure.
+    - Implement `scrapeProductDetails(String productUrl)` (optional, for initial add): Fetches HTML, extracts price, name, and image URL. Return a DTO or Map.
+  css_selectors: Use robust CSS selectors to target price, name, and image elements. Be aware that these might change per retailer site and over time.
+  site_specificity: Consider implementing site-specific parsing strategies if targeting multiple retailers with different HTML structures.
+  error_handling:
+    - Handle potential errors gracefully:
+      - Network timeouts (`SocketTimeoutException`)
+      - Connection errors (`ConnectionRefused`, UnknownHostException)
+      - HTTP errors (Jsoup's `HttpStatusException` for 4xx/5xx)
+      - HTML parsing errors (Element not found -> return null/empty, log appropriately)
+    - Throw specific custom exceptions (e.g., `ScrapingException`) or return null/Optional.empty() to signal failure to the calling service.
+  politeness:
+    - User-Agent: Set a descriptive User-Agent string (configurable via `application.yml`). See `configuration.yml`.
+    - Delays: Implement delays between requests if scraping multiple items sequentially or frequently from the same domain (configurable via `application.yml`).
+
+    - Robots.txt: (Optional but recommended) Consider respecting `robots.txt` rules, although this adds complexity.

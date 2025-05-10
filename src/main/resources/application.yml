@@ -1,0 +1,60 @@
+server:
+  port: 8091
+  servlet:
+    context-path: /api/v1
+
+spring:
+  application:
+    name: price-tracker-app
+  # Configure datasource for development with PostgreSQL
+  datasource:
+    url: jdbc:postgresql://localhost:5432/price_tracker_db
+    username: postgres
+    password: root
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update # Change to validate once using Liquibase properly
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  # Liquibase Configuration
+  liquibase:
+    enabled: false # Set to true once you have changelog files
+    change-log: classpath:db/changelog/db.changelog-master.xml
+  # Mail Configuration (for price alerts)
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: your-email@gmail.com
+    password: your-app-password
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+  # ThymeLeaf Configuration
+  thymeleaf:
+    cache: false
+    mode: HTML
+    encoding: UTF-8
+    servlet:
+      content-type: text/html
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.pricetracker.app: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql: TRACE
+
+# App-specific configurations
+app:
+  scheduling:
+    checkRateMs: 3600000  # 1 hour in milliseconds
+  scraper:
+    default-delay-ms: 1000  # 1 second delay between requests
+    user-agent: "PriceTrackerBot/1.0 (+http://pricetracker.example.com/bot-info)"
+  notification:
+    cooldown-hours: 24  # Set a 24-hour cooldown between notifications for the same product/user 

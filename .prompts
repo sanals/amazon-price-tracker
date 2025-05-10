@@ -1,0 +1,690 @@
+Okay, here is a sequence of detailed, step-by-step prompts you can give to Cursor, based on the goal of incrementally building the Price Tracker application and deferring security. Each prompt builds upon the previous ones.
+
+**Phase 1: Project Foundation & Basic Structure**
+
+**Prompt 1: Initialize Maven Project & Core Dependencies**
+
+```prompt
+Initialize a new Spring Boot 3.x Maven project using Java 17+.
+- Group ID: `com.pricetracker`
+- Artifact ID: `price-tracker-app`
+- Name: `Price Tracker Application`
+- Package Name: `com.pricetracker.app`
+
+Based on rule file `11-build-dependencies.yml`, update the `pom.xml` to include the following essential dependencies:
+- `spring-boot-starter-web`
+- `spring-boot-starter-data-jpa`
+- `org.projectlombok:lombok` (optional, if you want to use it)
+- `org.postgresql:postgresql` (Database driver)
+- `org.jsoup:jsoup` (for scraping)
+- `spring-boot-starter-validation`
+- `spring-boot-starter-mail`
+- `org.springdoc:springdoc-openapi-starter-webmvc-ui` (for API docs)
+- `spring-boot-starter-actuator` (for monitoring)
+- `spring-boot-starter-test` (for testing)
+- `com.h2database:h2` (with scope `test`)
+- `org.liquibase:liquibase-core` (for migrations)
+
+**IMPORTANT:** Do NOT include `spring-boot-starter-security` or any JWT dependencies yet.
+
+Ensure the Maven compiler plugin is configured for Java 17.
+```
+
+**Prompt 2: Create Main Application Class & Basic Package Structure**
+
+```prompt
+1.  Create the main application class `PriceTrackerApplication.java` in `com.pricetracker.app`. Annotate it with `@SpringBootApplication`.
+2.  Based on rule file `14-project-structure-required-files.yml`, create the following basic package structure under `src/main/java/com/pricetracker/app/`:
+    - `config`
+    - `controller`
+    - `service`
+    - `repository`
+    - `entity`
+    - `dto`
+    - `exception`
+    - `scraping`
+    - `scheduling`
+    - `notification`
+    - `util`
+3.  Also create `src/main/resources/db/changelog` for Liquibase scripts.
+4.  Create `src/test/java/com.pricetracker.app/` and `src/test/resources/`.
+```
+
+**Prompt 3: Initial `application.yml` Configuration**
+
+```prompt
+Based on rule file `10-configuration-rules.yml`, create the `src/main/resources/application.yml` file with the following initial basic configuration:
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+
+spring:
+  application:
+    name: price-tracker-app
+  # Configure datasource for DEVELOPMENT (PostgreSQL - replace placeholders)
+  datasource:
+    url: jdbc:postgresql://localhost:5432/price_tracker_db # Replace if needed
+    username: your_db_user # Replace with your user
+    password: your_db_password # Replace with your password
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate # Use validate with Liquibase
+    show-sql: true # Useful for dev
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true # Optional: pretty print SQL
+  # Liquibase Configuration
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.xml
+  # Basic logging
+  logging:
+    level:
+      root: INFO
+      com.pricetracker.app: DEBUG
+      org.hibernate.SQL: DEBUG # Log SQL statements
+      org.hibernate.type.descriptor.sql: TRACE # Log SQL parameters (use with caution)
+  # Mail Sender placeholder (configure actual values later or via env vars)
+  mail:
+    host: smtp.example.com
+    port: 587
+    username: your-email@example.com
+    password: your-email-password
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+  # Springdoc OpenAPI config
+  springdoc:
+    api-docs.path: /api-docs
+    swagger-ui.path: /swagger-ui.html
+
+# Create a corresponding src/test/resources/application-test.yml for tests
+# Use H2 in-memory DB for tests:
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: password
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop # Create schema for each test run
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  liquibase:
+    enabled: false # Typically disable Liquibase for H2 create-drop
+  sql:
+    init:
+      mode: embedded # Allows schema.sql/data.sql in test resources if needed
+```
+
+**Phase 2: Core Domain & Data Layer**
+
+**Prompt 4: Create Auditing Base Class**
+
+```prompt
+Based on rule file `06-database.yml` (Auditing section), create an abstract base class `Auditable.java` in `com.pricetracker.app.entity.base` (create the `base` subpackage).
+
+- Annotate it with `@MappedSuperclass` and `@EntityListeners(AuditingEntityListener.class)`.
+- Include protected fields `createdAt` (Instant, `@CreatedDate`, non-updatable) and `updatedAt` (Instant, `@LastModifiedDate`).
+- Enable JPA auditing in the main application class (`PriceTrackerApplication`) by adding `@EnableJpaAuditing`.
+```
+
+**Prompt 5: Define Core JPA Entities (No Security Fields Yet)**
+
+```prompt
+Based on `15-domain-models-dtos.yml` and `06-database.yml`, define the following JPA entities in `com.pricetracker.app.entity`. Make them extend the `Auditable` base class created previously. Use Lombok annotations (`@Getter`, `@Setter`, `@NoArgsConstructor`, `@AllArgsConstructor`, `@Builder` - optional) if desired. Add basic column definitions and relationships. **Exclude security-related fields for now (like User roles, enabled, RefreshToken entity).**
+
+1.  **`User.java`:**
+    - `id` (Long, PK, GeneratedValue)
+    - `username` (String, unique, not null)
+    - `email` (String, unique, not null)
+    - `passwordHash` (String, not null) - We'll add this now, but won't use it until the Security phase.
+2.  **`Product.java`:**
+    - `id` (Long, PK, GeneratedValue)
+    - `productUrl` (String, unique, not null, indexed, consider length e.g., 1024)
+    - `name` (String, not null)
+    - `imageUrl` (String, optional, consider length e.g., 1024)
+    - `lastCheckedPrice` (BigDecimal, optional, specify precision/scale e.g., 10, 2)
+3.  **`TrackedProduct.java`:**
+    - `id` (Long, PK, GeneratedValue)
+    - `user` (ManyToOne relationship to User, LAZY fetch, JoinColumn `user_id`, indexed)
+    - `product` (ManyToOne relationship to Product, LAZY fetch, JoinColumn `product_id`, indexed)
+    - `desiredPrice` (BigDecimal, not null, specify precision/scale)
+    - `notificationEnabled` (Boolean, not null, default true)
+    - `lastNotifiedAt` (Instant, optional)
+    - Add `@Table` annotation with a unique constraint on (`user_id`, `product_id`).
+4.  **`PriceHistory.java`:**
+    - `id` (Long, PK, GeneratedValue)
+    - `product` (ManyToOne relationship to Product, LAZY fetch, JoinColumn `product_id`, indexed)
+    - `price` (BigDecimal, not null, specify precision/scale)
+    - `timestamp` (Instant, not null, indexed, should default to creation time conceptually) - Note: Auditable provides `createdAt` which might suffice, or keep this explicit `timestamp`. Let's keep `timestamp` explicit for price history records. Initialize it perhaps in the service layer or constructor.
+
+Ensure appropriate JPA annotations (`@Entity`, `@Table`, `@Id`, `@GeneratedValue`, `@Column`, `@ManyToOne`, `@JoinColumn`, `@Index`, `WorkspaceType.LAZY`) are used.
+```
+
+**Prompt 6: Create Spring Data JPA Repositories**
+
+```prompt
+Based on rule file `06-database.yml`, create Spring Data JPA repository interfaces in `com.pricetracker.app.repository` for each entity created in the previous step:
+
+1.  `UserRepository`: Extend `JpaRepository<User, Long>`. Add methods:
+    - `Optional<User> findByUsername(String username);`
+    - `Optional<User> findByEmail(String email);`
+    - `Boolean existsByUsername(String username);`
+    - `Boolean existsByEmail(String email);`
+2.  `ProductRepository`: Extend `JpaRepository<Product, Long>`. Add method:
+    - `Optional<Product> findByProductUrl(String productUrl);`
+    - `List<Product> findAll();` // Or specific queries needed later
+3.  `TrackedProductRepository`: Extend `JpaRepository<TrackedProduct, Long>`. Add methods:
+    - `Optional<TrackedProduct> findByUserIdAndProductId(Long userId, Long productId);`
+    - `boolean existsByUserIdAndProductId(Long userId, Long productId);`
+    - `Page<TrackedProduct> findByUserId(Long userId, Pageable pageable);` // For getting user's tracked items
+    - `List<TrackedProduct> findByProductIdAndNotificationEnabledTrue(Long productId);` // For alerting
+4.  `PriceHistoryRepository`: Extend `JpaRepository<PriceHistory, Long>`. Add method:
+    - `Page<PriceHistory> findByProductIdOrderByTimestampDesc(Long productId, Pageable pageable);` // For getting history
+```
+
+**Prompt 7: Create Initial Liquibase Changelog**
+
+```prompt
+Create the initial Liquibase changelog files:
+
+1. First, create the master changelog file `db.changelog-master.xml` in `src/main/resources/db/changelog/`:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <include file="db/changelog/changes/0001-initial-schema.xml"/>
+</databaseChangeLog>
+```
+
+2. Then create the first changelog file `changes/0001-initial-schema.xml` in `src/main/resources/db/changelog/changes/`:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="0001-initial-schema" author="developer">
+        <!-- Users table -->
+        <createTable tableName="users">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="username" type="varchar(50)">
+                <constraints unique="true" nullable="false"/>
+            </column>
+            <column name="email" type="varchar(100)">
+                <constraints unique="true" nullable="false"/>
+            </column>
+            <column name="password_hash" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <!-- Products table -->
+        <createTable tableName="products">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="product_url" type="varchar(1024)">
+                <constraints unique="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="image_url" type="varchar(1024)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="last_checked_price" type="numeric(10, 2)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <!-- TrackedProducts table -->
+        <createTable tableName="tracked_products">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="bigint">
+                <constraints nullable="false" foreignKeyName="fk_tracked_product_user" references="users(id)"/>
+            </column>
+            <column name="product_id" type="bigint">
+                <constraints nullable="false" foreignKeyName="fk_tracked_product_product" references="products(id)"/>
+            </column>
+            <column name="desired_price" type="numeric(10, 2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="notification_enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_notified_at" type="timestamp with time zone">
+                <constraints nullable="true"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <!-- Add unique constraint to prevent duplicate tracking -->
+        <addUniqueConstraint tableName="tracked_products" 
+            columnNames="user_id, product_id" 
+            constraintName="uk_user_product"/>
+        
+        <!-- PriceHistory table -->
+        <createTable tableName="price_history">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="product_id" type="bigint">
+                <constraints nullable="false" foreignKeyName="fk_price_history_product" references="products(id)"/>
+            </column>
+            <column name="price" type="numeric(10, 2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="timestamp" type="timestamp with time zone" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <!-- Create indexes for foreign keys and frequently queried columns -->
+        <createIndex tableName="products" indexName="idx_product_url">
+            <column name="product_url"/>
+        </createIndex>
+        
+        <createIndex tableName="tracked_products" indexName="idx_tracked_product_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        
+        <createIndex tableName="tracked_products" indexName="idx_tracked_product_product_id">
+            <column name="product_id"/>
+        </createIndex>
+        
+        <createIndex tableName="price_history" indexName="idx_price_history_product_id">
+            <column name="product_id"/>
+        </createIndex>
+        
+        <createIndex tableName="price_history" indexName="idx_price_history_timestamp">
+            <column name="timestamp"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
+```
+```
+
+**Prompt 8: Implement Basic Repository Tests**
+
+```prompt
+Based on rule file `08-testing.yml`, implement basic integration tests for the repositories using `@DataJpaTest` and the H2 test database configuration.
+
+Create test classes in `src/test/java/com/pricetracker/app/repository/`:
+1.  `UserRepositoryTest`: Test basic save, findById, findByUsername, findByEmail, exists methods.
+2.  `ProductRepositoryTest`: Test save, findById, findByProductUrl.
+3.  `TrackedProductRepositoryTest`: Test save, findById, findByUserIdAndProductId, existsByUserIdAndProductId, findByUserId (with Pageable).
+4.  `PriceHistoryRepositoryTest`: Test save, findById, findByProductIdOrderByTimestampDesc (with Pageable).
+
+Use `@Autowired` for the repository under test and `TestEntityManager` (if needed) to prepare data. Ensure tests cover basic CRUD and custom query methods.
+```
+
+**Phase 3: Core Business Logic & Services (No Authentication Context)**
+
+**Prompt 9: Define Core DTOs & Standard API Response**
+
+```prompt
+Based on `15-domain-models-dtos.yml` and `05-api-specification.yml`, define the following DTOs in `com.pricetracker.app.dto`. Use Java Records where suitable. **Exclude Auth-related DTOs for now.** Add validation annotations (`jakarta.validation.constraints.*`) as needed later (Prompt 18).
+
+1.  **`response/ApiResponse.java`**: Define the standard generic wrapper:
+    - `status` (enum `Status { SUCCESS, ERROR }` or String)
+    - `code` (int)
+    - `message` (String)
+    - `data` (T)
+    - `timestamp` (Instant)
+    - Include static factory methods like `ApiResponse.success(T data, String message)` and `ApiResponse.error(String message, int code)`.
+2.  **`response/UserResponse.java`**: (id, username, email) - For returning basic user info.
+3.  **`response/ProductResponse.java`**: (productId, productUrl, name, imageUrl, lastCheckedPrice, createdAt, updatedAt)
+4.  **`response/TrackedProductResponse.java`**: (id, product: ProductResponse, desiredPrice, notificationEnabled, createdAt, updatedAt)
+5.  **`response/PriceHistoryResponse.java`**: (id, price, timestamp)
+6.  **`request/TrackProductRequest.java`**: (productUrl - must be a valid URL, desiredPrice - must be positive) - Add validation annotations later.
+7.  **`request/UpdateTrackedProductRequest.java`**: (desiredPrice - optional, positive, notificationEnabled - optional, boolean) - Add validation annotations later.
+
+Create necessary subpackages `request` and `response` under `dto`.
+```
+
+**Prompt 10: Implement Scraper Service**
+
+```prompt
+Based on rule file `18-scraping.yml`, implement the `ScraperService.java` interface and its implementation `JsoupScraperService.java` in `com.pricetracker.app.scraping`.
+
+- **Interface `ScraperService`:**
+    - `Optional<BigDecimal> scrapePrice(String productUrl);`
+    - `Optional<ProductDetails> scrapeProductDetails(String productUrl);` (Define a simple `ProductDetails` record/class within the scraping package or dto containing Optional<String> name, Optional<String> imageUrl, Optional<BigDecimal> price).
+- **Implementation `JsoupScraperService`:**
+    - Inject `@Value("${app.scraper.user-agent}")` for the User-Agent (add this property to `application.yml` - see `10-configuration-rules.yml`).
+    - Use `Jsoup.connect(productUrl).userAgent(userAgent).get()` to fetch HTML.
+    - Implement basic logic using Jsoup CSS selectors (`doc.selectFirst(...)`) to extract price, name, image URL. **Start with placeholder selectors** like `#price`, `#productTitle`, `#mainImage` - these will need refinement for real sites.
+    - Handle potential errors gracefully (network exceptions, `HttpStatusException`, `NullPointerException` if selectors don't match). Log errors using SLF4j (`private static final Logger log = LoggerFactory.getLogger(...)`) and return `Optional.empty()` on failure.
+    - Add basic unit tests using Mockito to mock Jsoup responses/errors.
+```
+
+**Prompt 11: Implement Core Product Tracking Service Logic (No Auth Context)**
+
+```prompt
+Implement the core logic for `ProductTrackingService.java` in `com.pricetracker.app.service`. Inject necessary repositories (`ProductRepository`, `TrackedProductRepository`). Annotate the class with `@Service` and methods requiring database consistency with `@Transactional`.
+
+**IMPORTANT:** For now, methods requiring a user will accept `userId` as a `Long` parameter. We will replace this with security context later.
+
+- `TrackedProduct addProductTracking(Long userId, TrackProductRequest request)`:
+    - Check if user already tracks this URL using `trackedProductRepository.existsByUserIdAndProductId(...)` after finding/creating the product. Throw exception if already tracked.
+    - Find `Product` by `request.getProductUrl()` using `productRepository`.
+    - If `Product` not found:
+        - Call `scraperService.scrapeProductDetails(request.getProductUrl())`. Handle Optional response.
+        - Create and save a new `Product` entity (use details from scraping, set placeholder name/price if scraping fails). Throw exception if URL is invalid or initial scrape completely fails.
+    - Create and save a `TrackedProduct` linking the found/created `Product` and the passed `userId`. Set `desiredPrice` from the request.
+    - Return the saved `TrackedProduct`.
+- `Page<TrackedProduct> getTrackedProductsForUser(Long userId, Pageable pageable)`: Use `trackedProductRepository.findByUserId(...)`.
+- `Optional<TrackedProduct> getTrackedProductById(Long userId, Long trackedProductId)`: Fetch `TrackedProduct` by ID and verify it belongs to the `userId`.
+- `TrackedProduct updateTrackedProduct(Long userId, Long trackedProductId, UpdateTrackedProductRequest request)`: Fetch TrackedProduct, verify ownership (`userId`), update fields if present in request, save, and return.
+- `void deleteTrackedProduct(Long userId, Long trackedProductId)`: Fetch TrackedProduct, verify ownership (`userId`), delete.
+
+Implement basic unit tests using Mockito to mock repository and scraper interactions.
+```
+
+**Prompt 12: Implement Price Check Scheduler & Notification Service (Basic Structure)**
+
+```prompt
+1.  **`PriceCheckScheduler.java`** (in `com.pricetracker.app.scheduling`):
+    - Annotate with `@Component`.
+    - Inject `ProductRepository`, `PriceHistoryRepository`, `TrackedProductRepository`, `ScraperService`, and `NotificationService`.
+    - Create a method annotated with `@Scheduled(fixedRateString = "${app.scheduling.checkRateMs:3600000}")` (add `app.scheduling.checkRateMs` to `application.yml`, default to 1 hour).
+    - **Inside the scheduled method (initial logic):**
+        - Fetch products (e.g., `productRepository.findAll()` - optimize later if needed).
+        - Loop through products:
+            - Call `scraperService.scrapePrice(product.getProductUrl())`.
+            - If price scraped successfully and is different from `product.getLastCheckedPrice()`:
+                - Update `product.setLastCheckedPrice(scrapedPrice)`.
+                - Create new `PriceHistory` record (set product, price, timestamp).
+                - Save product and price history (`productRepository.save`, `priceHistoryRepository.save`).
+                - **Log info about price change.** (Defer alerting logic).
+            - Handle scraping errors (log warning/error).
+            - Consider adding a small delay between scrapes (`Thread.sleep`) based on `app.scraper.default-delay-ms` (add to `application.yml`).
+2.  **`NotificationService.java`** (interface in `com.pricetracker.app.notification`)
+    - `void sendPriceAlert(TrackedProduct trackedProduct, BigDecimal currentPrice);`
+3.  **`EmailNotificationService.java`** (implementation in `com.pricetracker.app.notification`)
+    - Annotate with `@Service`.
+    - Inject `JavaMailSender`.
+    - Implement `sendPriceAlert`:
+        - Create a `SimpleMailMessage` or `MimeMessage` (using `MimeMessageHelper` for HTML).
+        - Set recipient (`trackedProduct.getUser().getEmail()`).
+        - Set subject (e.g., "Price Alert for [Product Name]").
+        - Set email body (include product name, URL, desired price, current price).
+        - Call `javaMailSender.send(message)`.
+        - Add basic error handling (`try-catch MailException`, log errors).
+        - **Consider adding `@Async` to the method** (requires `@EnableAsync` on a `@Configuration` class or the main app class, and potentially a custom TaskExecutor bean).
+
+Implement basic unit tests for these services (mock dependencies).
+```
+
+**Phase 4: Basic API Layer (No Authentication Context)**
+
+**Prompt 13: Implement Product Tracking Controller (No Auth)**
+
+```prompt
+Based on `05-api-specification.yml`, implement `ProductTrackingController.java` in `com.pricetracker.app.controller`. Annotate with `@RestController` and `@RequestMapping("/track")`. Inject `ProductTrackingService` and mappers if needed (or map manually/use MapStruct).
+
+**IMPORTANT:** Methods will accept `userId` as a path variable or request parameter for now where needed (this is temporary and insecure). Do NOT add security annotations yet. Ensure all methods return `ResponseEntity<ApiResponse<T>>`.
+
+- `POST /`: `addProductTracking(@PathVariable Long userId, @RequestBody TrackProductRequest request)` - Call service, map result to `ApiResponse<TrackedProductResponse>`, return 201 Created.
+- `GET /user/{userId}`: `getTrackedProducts(@PathVariable Long userId, Pageable pageable)` - Call service, map `Page<TrackedProduct>` to `Page<TrackedProductResponse>`, return `ApiResponse<Page<TrackedProductResponse>>`.
+- `GET /{trackedProductId}/user/{userId}`: `getTrackedProduct(@PathVariable Long trackedProductId, @PathVariable Long userId)` - Call service, handle Optional, map result, return `ApiResponse<TrackedProductResponse>`.
+- `PUT /{trackedProductId}/user/{userId}`: `updateTrackedProduct(@PathVariable Long trackedProductId, @PathVariable Long userId, @RequestBody UpdateTrackedProductRequest request)` - Call service, map result, return `ApiResponse<TrackedProductResponse>`.
+- `DELETE /{trackedProductId}/user/{userId}`: `deleteTrackedProduct(@PathVariable Long trackedProductId, @PathVariable Long userId)` - Call service, return `ApiResponse<Void>` with 204 No Content.
+- `GET /product/{productId}/history`: `getPriceHistory(@PathVariable Long productId, Pageable pageable)` - Inject `PriceHistoryRepository` or add method to service. Fetch history, map to `ApiResponse<Page<PriceHistoryResponse>>`. **Note:** This endpoint currently has no user association check.
+
+Use constructor injection (`@RequiredArgsConstructor` from Lombok is convenient). Map Entities to Response DTOs.
+```
+
+**Prompt 14: Implement Basic Global Exception Handler**
+
+```prompt
+Based on `19-error-handling.yml`, implement `GlobalExceptionHandler.java` in `com.pricetracker.app.exception`.
+
+- Annotate with `@ControllerAdvice`.
+- Implement `@ExceptionHandler` methods for:
+    - `ResourceNotFoundException` (create this custom exception class): Return `ApiResponse.error("Resource not found", HttpStatus.NOT_FOUND.value())`.
+    - `MethodArgumentNotValidException` (for `@Valid` failures later): Extract validation errors, format a message, return `ApiResponse.error(message, HttpStatus.BAD_REQUEST.value())`.
+    - Generic `Exception`: Log the full stack trace (important!), return `ApiResponse.error("An unexpected error occurred", HttpStatus.INTERNAL_SERVER_ERROR.value())`.
+- Ensure handlers return `ResponseEntity<ApiResponse<Object>>`.
+- Create custom exceptions like `ResourceNotFoundException`, `ProductAlreadyTrackedException`, `ScrapingException` in the `exception` package as needed by services. Update services to throw these specific exceptions. Add handlers for them.
+```
+
+**Prompt 15: Add API Documentation Annotations**
+
+```prompt
+Based on `05-api-specification.yml` (API Documentation part), add Springdoc OpenAPI annotations (`@Operation`, `@ApiResponse`, `@Parameter`, `@RequestBody` description, `@Schema` on DTOs) to the `ProductTrackingController` methods and the DTOs (`TrackProductRequest`, `UpdateTrackedProductRequest`, `TrackedProductResponse`, etc.).
+
+Ensure DTO properties have `@Schema` annotations with examples or descriptions where helpful. Annotate controller methods clearly describing what they do, expected parameters, and possible responses (including error responses like 404, 400).
+Access the generated docs at `/swagger-ui.html`.
+```
+
+**Prompt 16: Implement Controller Integration Tests**
+
+```prompt
+Based on `08-testing.yml`, implement integration tests for `ProductTrackingController` using `@SpringBootTest`, `@AutoConfigureMockMvc`, and `MockMvc`.
+
+Create `ProductTrackingControllerTest.java` in `src/test/java/com.pricetracker.app/controller/`.
+- Mock the `ProductTrackingService` bean using `@MockBean`.
+- Write tests for each endpoint:
+    - Use `mockMvc.perform(...)` with appropriate HTTP methods, paths, request bodies (use `ObjectMapper` to serialize DTOs), and path variables.
+    - Use `andExpect(...)` to verify:
+        - HTTP status code (e.g., `status().isCreated()`, `status().isOk()`, `status().isNotFound()`).
+        - Response content type (`content().contentType(MediaType.APPLICATION_JSON)`).
+        - Response body structure and values using `jsonPath(...)` expressions (e.g., `jsonPath("$.status").value("SUCCESS")`, `jsonPath("$.data.id").value(...)`).
+- Test both success cases (mock service methods to return valid data) and error cases (mock service methods to throw exceptions like `ResourceNotFoundException`).
+```
+
+**Phase 5: Add Authentication & Authorization (Security Layer)**
+
+**Prompt 17: Add Security Dependencies & Configure JWT Properties**
+
+```prompt
+1.  Add the required Spring Security and JWT dependencies to `pom.xml` based on `11-build-dependencies.yml`:
+    - `spring-boot-starter-security`
+    - `io.jsonwebtoken:jjwt-api`
+    - `io.jsonwebtoken:jjwt-impl`
+    - `io.jsonwebtoken:jjwt-jackson`
+2.  Add JWT configuration properties to `application.yml` under an `api.jwt` section, based on `10-configuration-rules.yml`:
+    - `secret-key`: Use a placeholder like `${JWT_SECRET_KEY:YourDefaultSecretKeyNeedsToBeLongAndSecure}` (Use environment variables in real deployments!).
+    - `access-token-expiration-ms`: e.g., 3600000 (1 hour)
+    - `refresh-token-expiration-ms`: e.g., 604800000 (7 days) - If implementing refresh tokens.
+```
+
+**Prompt 18: Implement UserDetailsService & Update User Entity**
+
+```prompt
+1.  **Update `User.java` Entity:**
+    - Add a `roles` field (e.g., `private Set<String> roles = new HashSet<>();` annotated with `@ElementCollection(fetch = FetchType.EAGER)`). Or create a separate `Role` entity and use `@ManyToMany`. Let's use `Set<String>` for simplicity now.
+    - Add an `enabled` field (boolean, default true).
+    - Create a new Liquibase changelog file `changes/0002-add-user-roles-and-enabled.xml` in `src/main/resources/db/changelog/changes/` and update the master changelog to include it. This will add the roles and enabled columns to the `users` table.
+2.  **Implement `UserDetailsServiceImpl.java`** in `com.pricetracker.app.security`:
+    - Implement the `UserDetailsService` interface.
+    - Inject `UserRepository`.
+    - Implement the `loadUserByUsername(String username)` method:
+        - Find the user by username using `userRepository`. Throw `UsernameNotFoundException` if not found.
+        - Create and return a `org.springframework.security.core.userdetails.User` object using the found user's username, passwordHash, enabled status, and map the roles Set to `GrantedAuthority` objects (e.g., `user.getRoles().stream().map(SimpleGrantedAuthority::new).collect(Collectors.toList())`).
+```
+
+**Prompt 19: Implement JWT Service**
+
+```prompt
+Create `JwtService.java` interface and `JwtServiceImpl.java` implementation in `com.pricetracker.app.security.jwt`.
+
+- **`JwtService` interface:**
+    - `String generateAccessToken(UserDetails userDetails);`
+    - `String generateRefreshToken(UserDetails userDetails);` (Optional: if implementing refresh tokens)
+    - `boolean isTokenValid(String token, UserDetails userDetails);`
+    - `String extractUsername(String token);`
+    - `Claims extractAllClaims(String token);`
+    - `<T> T extractClaim(String token, Function<Claims, T> claimsResolver);`
+- **`JwtServiceImpl` implementation:**
+    - Inject JWT properties using `@Value` or a `@ConfigurationProperties` class.
+    - Implement methods using the `io.jsonwebtoken.Jwts` builder and parser.
+    - Use `Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8))` to create the signing key.
+    - Set subject, issuedAt, expiration, and potentially custom claims.
+    - Handle JWT exceptions (`ExpiredJwtException`, `MalformedJwtException`, etc.) in validation logic.
+```
+
+**Prompt 20: Implement JwtAuthenticationFilter & Security Configuration**
+
+```prompt
+1.  **Implement `JwtAuthenticationFilter.java`** in `com.pricetracker.app.security.jwt`:
+    - Extend `OncePerRequestFilter`.
+    - Inject `JwtService` and `UserDetailsService`.
+    - Implement `doFilterInternal`:
+        - Extract the JWT from the `Authorization` header ("Bearer " prefix).
+        - If token exists, extract username using `jwtService`.
+        - If username exists and user is not already authenticated (`SecurityContextHolder.getContext().getAuthentication() == null`):
+            - Load `UserDetails` using `userDetailsService`.
+            - Validate token using `jwtService.isTokenValid(...)`.
+            - If valid, create `UsernamePasswordAuthenticationToken`, set details, and set it in `SecurityContextHolder`.
+        - Call `filterChain.doFilter(request, response)`.
+2.  **Implement `SecurityConfig.java`** in `com.pricetracker.app.config`:
+    - Annotate with `@Configuration` and `@EnableWebSecurity`.
+    - Inject `JwtAuthenticationFilter` and `UserDetailsService`.
+    - Define a `PasswordEncoder` bean (`BCryptPasswordEncoder`).
+    - Define an `AuthenticationProvider` bean, setting the `UserDetailsService` and `PasswordEncoder`.
+    - Define the main `SecurityFilterChain` bean:
+        - Disable CSRF (`csrf -> csrf.disable()`).
+        - Configure public endpoints using `requestMatchers(...)` and `permitAll()`: `/api/v1/auth/**`, `/swagger-ui/**`, `/api-docs/**`, `/actuator/**` (adjust as needed).
+        - Require authentication for all other requests (`anyRequest().authenticated()`).
+        - Configure session management to stateless (`sessionManagement -> sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS)`).
+        - Set the configured `AuthenticationProvider`.
+        - Add the `JwtAuthenticationFilter` before the standard `UsernamePasswordAuthenticationFilter` (`addFilterBefore(...)`).
+    - Define an `AuthenticationManager` bean.
+```
+
+**Prompt 21: Implement Auth Controller & Update Services/Controllers**
+
+```prompt
+1.  **Implement `AuthController.java`** in `com.pricetracker.app.controller`:
+    - Annotate with `@RestController`, `@RequestMapping("/auth")`.
+    - Inject `AuthenticationManager`, `UserRepository`, `PasswordEncoder`, `JwtService`.
+    - **`POST /register`**:
+        - Accept `RegisterRequest` DTO (create this: username, email, password). Add validation.
+        - Check if user/email exists (`userRepository`). Throw exception if exists.
+        - Encode password using `passwordEncoder`.
+        - Create `User` entity (set roles e.g., "ROLE_USER", enabled=true). Save user.
+        - Return `ApiResponse<UserResponse>` (201 Created).
+    - **`POST /login`**:
+        - Accept `LoginRequest` DTO (create this: username, password). Add validation.
+        - Authenticate using `authenticationManager.authenticate(...)`. Handle `AuthenticationException`.
+        - Find user details (`userRepository`).
+        - Generate access token using `jwtService`.
+        - Create `AuthResponse` DTO (create this: accessToken, userId, username, email, roles).
+        - Return `ApiResponse<AuthResponse>`.
+    - (Optional) Add endpoints for refresh token if implementing.
+2.  **Update `ProductTrackingService`:**
+    - Remove the `Long userId` parameter from methods like `addProductTracking`, `getTrackedProductsForUser`, etc.
+    - Add helper method `private User getCurrentUser()` that uses `SecurityContextHolder.getContext().getAuthentication().getName()` to get the username and fetches the `User` entity from `userRepository`. Throw exception if user not found or not authenticated.
+    - Use `getCurrentUser().getId()` in repository calls where `userId` was previously used.
+3.  **Update `ProductTrackingController`:**
+    - Remove the temporary `userId` path variables/parameters.
+    - Add security annotations like `@PreAuthorize("isAuthenticated()")` if needed (though the main filter chain already secures these). Potentially add checks like `@PreAuthorize("#trackedProduct.user.username == authentication.name")` on update/delete if fetching the entity first in the controller (less common). Service layer checks are usually preferred.
+4.  **Update Controller Tests:**
+    - Update tests in `ProductTrackingControllerTest` to work with authentication. Use Spring Security Test utilities like `@WithMockUser` or manually craft authentication tokens for the test security context. Mock the service methods accordingly.
+    - Add tests for `AuthController`.
+```
+
+**Phase 6: Refinements & Completion**
+
+**Prompt 22: Implement Full Alerting Logic**
+
+```prompt
+Refine the `PriceCheckScheduler` and `NotificationService` interaction based on `17-business-logic.yml` (Alerting Logic):
+
+1.  In `PriceCheckScheduler` (after saving Product and PriceHistory):
+    - Fetch relevant `TrackedProduct` entries using `trackedProductRepository.findByProductIdAndNotificationEnabledTrue(product.getId())`.
+    - Loop through these `TrackedProduct`s:
+        - Check if `scrapedPrice <= trackedProduct.getDesiredPrice()`.
+        - Implement a cooldown check: Compare `trackedProduct.getLastNotifiedAt()` with the current time. Only proceed if enough time has passed (e.g., 1 day - make cooldown configurable).
+        - If conditions met:
+            - Call `notificationService.sendPriceAlert(trackedProduct, scrapedPrice)`.
+            - Update `trackedProduct.setLastNotifiedAt(Instant.now())`.
+            - Save the updated `trackedProduct` (consider batching saves if performance becomes an issue).
+```
+
+**Prompt 23: Add Input Validation**
+
+```prompt
+Go through all Request DTOs (`RegisterRequest`, `LoginRequest`, `TrackProductRequest`, `UpdateTrackedProductRequest`) and add appropriate `jakarta.validation.constraints.*` annotations (`@NotBlank`, `@Email`, `@Size`, `@URL`, `@Positive`, `@NotNull`).
+
+Ensure controller methods that accept these DTOs in `@RequestBody` are annotated with `@Valid`. The `GlobalExceptionHandler` should already handle `MethodArgumentNotValidException`. Add/refine tests for validation failures.
+```
+
+**Prompt 24: Enhance Logging & Monitoring**
+
+```prompt
+1.  **Logging:** Review services, controllers, and utility classes. Ensure SLF4j loggers are used (`private static final Logger log = ...`). Add meaningful log statements, especially for:
+    - INFO: Major actions (user registration, product tracking added).
+    - DEBUG: Method entry/exit, important variables, flow decisions.
+    - WARN: Recoverable errors, potential issues (e.g., scraping failed but continuing).
+    - ERROR: Unrecoverable errors, exceptions caught in handlers.
+    - Avoid logging sensitive data. Use parameter binding in logs (`log.info("Processing user: {}", username);`).
+2.  **Monitoring:** Ensure Spring Boot Actuator endpoints (`/actuator/health`, `/actuator/info`, `/actuator/metrics`) are configured and exposed appropriately in `application.yml` (`management.endpoints.web.exposure.include`). Add basic application info to `/actuator/info`.
+```
+
+**Prompt 25: Create Dockerfile & README**
+
+```prompt
+Based on `20-additional-requirements.yml`:
+
+1.  **Create `Dockerfile`** in the project root:
+    - Use a suitable base image (e.g., `eclipse-temurin:17-jdk-jre`).
+    - Copy the built JAR file (e.g., from `target/*.jar`).
+    - Expose the application port (e.g., 8080).
+    - Set the entry point to run the JAR (`java -jar app.jar`).
+    - Consider multi-stage builds for smaller final images.
+2.  **Create `README.md`** in the project root:
+    - Include sections for: Project Overview, Prerequisites (Java 17, Maven, Docker, PostgreSQL), Setup (clone, DB setup), Configuration (environment variables like `JWT_SECRET_KEY`, DB credentials), Build (`mvn clean install`), Run (using `java -jar`, Docker), API Documentation access (`/swagger-ui.html`).
+```
+
+**Prompt 26: Final Review & Testing**
+
+```prompt
+Perform a final review of the codebase against all the rule files. Run all unit and integration tests. Consider adding end-to-end tests using Testcontainers (`@SpringBootTest` with a real PostgreSQL container) to verify the full application flow, including database interactions and security. Ensure all dependencies are up-to-date and vulnerabilities are checked (`mvn dependency-check:check` if using the OWASP plugin).
+```
+
+This detailed sequence allows you to build the application incrementally, ensuring each part adheres to the defined rules and deferring security until the core functionality is in place. Remember to adapt placeholder values (DB credentials, selectors, JWT secret) as needed.

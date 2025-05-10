@@ -1,0 +1,117 @@
+# Price Tracker Application - Combined Cursor Rule File
+
+You are a highly skilled senior backend developer, expert in Java and Spring Boot, tasked with developing the backend for a price tracker application.
+Adhere to the architecture, standards, and best practices outlined in the provided project roadmap.
+Specifically, for Phase 1, focus on setting up the Spring Boot backend, including entity design, repository implementation, RESTful API controllers, and the price fetching service using Jsoup.
+Ensure to implement user authentication with Spring Security.  Use the provided file structure, and include all the specified dependencies in pom.xml.
+Pay close attention to the code quality standards, and implement proper exception handling.
+Document your code clearly.
+
+rules:
+  description: |
+    This rule file provides guidelines for developing a price tracker application using Spring Boot,
+    React, and Python (for AI), covering core functionality, architecture, and development best practices.
+
+  project_vision:
+    goal: "Develop a price tracker application with price monitoring, alerts, history, and eventual AI-driven analysis and mobile access."
+
+  core_features:
+    - "Product Tracking: Allow users to add product URLs."
+    - "Price Monitoring: Periodically retrieve and record prices."
+    - "Target Price Alerts: Notify users of price drops."
+    - "Price History Visualization: Display price trends."
+    - "(Future/AI) Price Trend Analysis & Prediction."
+    - "User Authentication and Management."
+
+  technology_stack:
+    frontend:
+      web:
+        framework: "React.js"
+        tools: "react-router-dom, axios/fetch, Context API, UI libraries, Chart.js/Recharts"
+      mobile:
+        options:
+          - "Native Android (Java): Android Studio, Retrofit/Volley, WorkManager, NotificationManager"
+          - "Cross-Platform (Flutter): Dart, http, workmanager/flutter_background, firebase_messaging"
+    backend:
+      language: "Java with Spring Boot"
+      responsibilities: "REST APIs, database interaction, scheduled tasks, security, validation"
+    database:
+      options: "PostgreSQL or MySQL"
+      schema:
+        - "Users: (id, username, password, email, etc.)"
+        - "Products: (id, name, URL, image URL, etc.)"
+        - "Tracked_Products: (user_id, product_id, target_price, notification_enabled, etc.)"
+        - "Price_History: (product_id, timestamp, price)"
+        - "Alerts: (user_id, product_id, timestamp, message, etc.)"
+    ai_service:
+      language: "Python"
+      role: "Trend analysis and predictive analytics"
+      stack: "requests, pandas, numpy, scikit-learn, Prophet/TensorFlow/Keras, Flask/FastAPI"
+    message_queue:
+      options: "RabbitMQ or Kafka"
+      purpose: "Asynchronous communication for scalability"
+    notification_service: "Spring Mail (initial), dedicated service with push notifications (future)"
+
+  development_plan:
+    phases:
+      - name: "Phase 1: Core Price Tracking"
+        backend:
+          language: "Java, Spring Boot"
+          tasks:
+            - "Project setup with Spring Initializr (Web, Data JPA, JDBC, Security, Validation)"
+            - "Directory structure: controller, service, repository, entity packages"
+            - "Dependencies: Spring Boot Starters, Jsoup, database driver"
+            - "Database configuration (application.properties/yml)"
+            - "JPA entity design"
+            - "Repository implementation (JpaRepository)"
+            - "RESTful API controllers (track, tracked, history)"
+            - "Price fetching service using Jsoup"
+            - "User authentication with Spring Security"
+        frontend:
+          language: "React"
+          tasks:
+            - "Project setup (Create React App/Vite)"
+            - "Component structure (AddProduct, TrackedProductsList, PriceHistoryChart, Authentication)"
+            - "API integration (axios/fetch)"
+            - "State management (Context API)"
+        price_monitoring: "Scheduled tasks (@Scheduled) for hourly price checks and history updates"
+        alerts: "Basic email alerts via Spring Mail"
+      - name: "Phase 2: Enhancements and Refinements"
+        backend:
+          - "Robust price fetching (Jsoup, error handling, retries, rate limiting)"
+        frontend:
+          - "Enhanced UI/UX (input validation, edit options, notifications)"
+          - "Improved data display (pagination, charts)"
+          - "User settings page"
+        notification: "Advanced notification service integration (Spring Mail config)"
+      - name: "Phase 3: AI Integration"
+        ai_service:
+          language: "Python"
+          tasks:
+            - "Set up Python environment and dependencies (requests, pandas, numpy, scikit-learn, prophet, flask)"
+            - "Price trend analysis API (/api/trends/{productId})"
+            - "Price drop prediction API (/api/predict/{productId})"
+            - "Integration with Spring Boot (RestTemplate/WebClient)"
+      - name: "Phase 4: Scalability and Advanced Features"
+        message_queue: "RabbitMQ or Kafka implementation"
+        worker_services:
+          - "Price fetching workers (Spring Boot)"
+          - "AI workers (Python)"
+          - "Notification workers"
+        advanced_ai: "Feature engineering, advanced models (LSTM), anomaly detection, model evaluation"
+        user_personalization: "Tracking behavior, recommendations, customized alerts, per-user predictions"
+      - name: "Phase 5: Mobile App Development"
+        options:
+          - "Native Android (Java)"
+          - "Cross-Platform (Flutter)"
+
+  key_considerations:
+    - "Leverage Java/Spring Boot and gradually integrate Python for AI."
+    - api_design: "RESTful, versioning, documentation (Swagger/OpenAPI), mobile optimization"
+    - "Asynchronous patterns: Message queues, reactive programming (Spring WebFlux)"
+    - "Security: JWT/OAuth2, input validation, TLS/SSL"
+    - "Error handling and logging: ELK/Splunk, centralized logging, distributed tracing"
+    - "Deployment: Docker, Kubernetes, CI/CD"
+    - "Iterative development: Start with MVP"
+    - "Monitoring and observability: Track metrics"
+    - "Mobile: Platform-specific UI/UX, background process optimization"

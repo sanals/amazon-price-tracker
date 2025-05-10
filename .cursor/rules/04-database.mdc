@@ -1,0 +1,31 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Database & Data Access
+# Priority: Combined Rules
+database_and_data_access:
+  framework: Use Spring Data JPA for database interactions.
+  repositories: Define repositories extending `JpaRepository` or `PagingAndSortingRepository`. Annotate with `@Repository`.
+  entities:
+    definition: Define JPA entities (`@Entity`) with proper annotations (`@Id`, `@GeneratedValue`, `@Column`, `@ManyToOne`, `@OneToMany`, `@ManyToMany`). See `domain-models-dtos.yml` for specific models.
+    relationships: Define relationships carefully, considering fetch types (prefer LAZY by default) and cascade options.
+  database_choice:
+    primary: PostgreSQL
+    compatibility: Ensure code is compatible with MySQL with minimal changes (driver and dialect).
+    configuration: Configure connection details in `application.yml`. See `configuration.yml`.
+  transaction_management:
+    implementation: Use `@Transactional` (typically at the service layer).
+    understanding: Understand transaction propagation levels if needed.
+  database_migrations:
+    tool: Use Liquibase for managing database schema evolution.
+    location: Include migration scripts in `src/main/resources/db/changelog/`.
+    configuration: Configure in `application.yml`. See `configuration.yml`.
+  query_optimization: Optimize queries where necessary. Use indexing strategically on frequently queried columns (e.g., `user_id` in `tracked_products`, `product_id` in `price_history`, `product_url` in `products`).
+  auditing:
+    implementation: Implement auditing fields (e.g., `createdAt`, `updatedAt`, `createdBy`, `updatedBy`) using Spring Data JPA Auditing.
+    setup: Use `@EnableJpaAuditing`, `@EntityListeners(AuditingEntityListener.class)`, `@CreatedDate`, `@LastModifiedDate`.
+
+
+    structure: Create a base `Auditable` class/interface if desired.

@@ -1,0 +1,29 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Testing
+# Priority: Combined Rules
+testing:
+  general: Write comprehensive tests.
+  coverage_goal: Aim for high test coverage (> 80%).
+  unit_tests:
+    scope: Test services and utility classes.
+    tools: Use JUnit 5 and Mockito.
+    technique: Mock dependencies (repositories, other services).
+  integration_tests:
+    controller_layer:
+      tools: Use `@SpringBootTest` and `MockMvc`.
+      scope: Test controller endpoints, request/response mapping, basic validation.
+      database: Mock the service layer or use `@DataJpaTest` context slice approach if focusing only on controller/web layer interaction. Avoid hitting a real database unless intended.
+    repository_layer:
+      tools: Use `@DataJpaTest` with an embedded database (like H2).
+      scope: Test JPA repository methods and custom queries.
+    full_integration:
+      tools: Use `@SpringBootTest` with `TestRestTemplate` or `WebTestClient`.
+      scope: Test the full application flow.
+      database: Consider using Testcontainers for a real database instance (PostgreSQL/MySQL).
+  test_database: Use H2 in-memory database configured specifically for the `test` profile (`application-test.yml`). See `configuration.yml`.
+
+  test_cases: Ensure tests cover success paths, error paths, and edge cases.

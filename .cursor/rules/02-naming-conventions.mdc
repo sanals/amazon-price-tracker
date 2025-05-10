@@ -1,0 +1,14 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Naming Conventions
+# Priority: Combined Rules
+naming_conventions:
+  classes_interfaces: PascalCase (e.g., `ProductTrackerService`, `TrackedProductRepository`, `PriceHistory`).
+  methods_variables: camelCase (e.g., `findProductByUrl`, `trackedProductList`, `scrapePriceFromPage`).
+  constants: ALL_CAPS_SNAKE_CASE (e.g., `MAX_SCRAPE_RETRIES`, `DEFAULT_SCHEDULE_RATE`).
+  packages: lowercase_snake_case or lowercase.dot.notation (e.g., `com.pricetracker.app.product_tracking`). Be consistent.
+
+  dtos: Suffix with `Request` or `Response` (e.g., `TrackProductRequest`, `ProductResponse`).

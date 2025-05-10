@@ -1,0 +1,68 @@
+# Java & Maven
+/target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# VS Code
+.vscode/
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# NetBeans
+/nbproject/private/
+/build/
+/dist/
+/nbbuild/
+/nbdist/
+/.nb-gradle/
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment & config
+.env
+*.env
+application-*.yml
+application-*.properties
+
+# History
+.history/
+
+# Others
+*.swp
+*~
+
+# Ignore test reports
+/test-output/
+
+# Ignore database files
+*.h2.db
+*.mv.db
+*.sqlite
+
+# Ignore coverage reports
+/coverage/
+/.coverage
+/coverage-final.json
+/coverage.xml
+
+# Ignore build tools
+/.gradle/
+/.mvn/
+
+# Ignore reference files
+reference_pom_file.xml 

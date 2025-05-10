@@ -1,0 +1,22 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Logging and Monitoring
+# Priority: Combined Rules
+logging_and_monitoring:
+  logging_framework: Use SLF4J with Logback (default in Spring Boot).
+  log_levels:
+    configuration: Configure log levels appropriately in `application.yml`. See `configuration.yml`.
+    recommendation: INFO for production, DEBUG for development.
+  log_content:
+    guidelines: Log meaningful information, especially at ERROR and WARN levels. Include context (e.g., user ID, product URL) where helpful.
+    security: Avoid logging sensitive information (passwords, tokens, personal data).
+  monitoring_actuator:
+    usage: Use Spring Boot Actuator for application monitoring.
+    endpoints: Expose relevant endpoints (e.g., `/actuator/health`, `/actuator/info`, `/actuator/metrics`). Configure exposure in `application.yml`.
+  external_monitoring:
+    status: Future/Production consideration.
+
+    tools: Integrate with external monitoring systems (Prometheus/Grafana, ELK stack) for comprehensive observability.

@@ -1,0 +1,32 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Security
+# Priority: Personal Rules > Cursor Directory Rules
+security:
+  framework: Implement Spring Security for authentication and authorization.
+  authentication:
+    method: Use JWT (JSON Web Tokens) for stateless authentication.
+    user_details_service: Implement `UserDetailsService` to load user data (e.g., `UserDetailsServiceImpl.java`).
+    jwt_service: Create a `JwtService` (interface/implementation) to generate, validate, and parse tokens.
+    jwt_filter: Implement a `JwtAuthenticationFilter` to process tokens on incoming requests.
+    entry_point: Implement `AuthenticationEntryPoint` for handling authentication failures.
+  authorization:
+    configuration: Secure endpoints using `SecurityFilterChain` configuration in `SecurityConfig.java`.
+    method_level: Use method-level security (`@PreAuthorize`) if needed for finer-grained control.
+  password_management:
+    encryption: Use `BCryptPasswordEncoder` for securely hashing passwords. Store only the hash.
+  input_validation:
+    implementation: Use Bean Validation (`jakarta.validation.constraints.*` annotations like `@NotNull`, `@Email`, `@Size`) on DTOs.
+    enforcement: Use `@Valid` in controller methods to trigger validation.
+  cors:
+    configuration: Configure CORS properly (`@CrossOrigin` or global configuration in `WebConfig.java`) to allow requests from the React frontend. See `configuration.yml` for frontend URL property.
+  https: Ensure HTTPS is enforced in production environments.
+  vulnerability_protection: Consider protection against common web vulnerabilities (e.g., XSS, CSRF - though CSRF is less relevant for stateless JWT APIs).
+  refresh_tokens:
+    status: Future consideration.
+    implementation: If implemented, use a refresh token mechanism for longer-lived sessions.
+
+    storage: Store refresh tokens securely (e.g., in the database associated with the user, potentially in a dedicated `RefreshToken` entity).

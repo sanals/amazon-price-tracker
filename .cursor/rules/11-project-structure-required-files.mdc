@@ -1,0 +1,59 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# --- II. PROJECT STRUCTURE & REQUIRED FILES ---
+
+# Required Project Structure (Adapt path com/pricetracker/app as needed)
+# Based on personal rules, adapted for Price Tracker
+required_structure:
+  enforce_folder_existence:
+    - "src/main/java/com/pricetracker/app/"
+    - "src/main/java/com/pricetracker/app/config/"
+    - "src/main/java/com/pricetracker/app/controller/"
+    - "src/main/java/com/pricetracker/app/service/"
+    - "src/main/java/com/pricetracker/app/repository/"
+    - "src/main/java/com/pricetracker/app/entity/"
+    - "src/main/java/com/pricetracker/app/dto/"
+    - "src/main/java/com/pricetracker/app/dto/request/"
+    - "src/main/java/com/pricetracker/app/dto/response/"
+    - "src/main/java/com/pricetracker/app/exception/"
+    - "src/main/java/com/pricetracker/app/security/"
+    - "src/main/java/com/pricetracker/app/security/jwt/" # Specific sub-package for JWT
+    - "src/main/java/com/pricetracker/app/scraping/" # Dedicated package for scraping
+    - "src/main/java/com/pricetracker/app/scheduling/" # For @Scheduled tasks
+    - "src/main/java/com/pricetracker/app/notification/" # For notification logic
+    - "src/main/java/com/pricetracker/app/util/"
+    - "src/main/resources/"
+    - "src/main/resources/db/changelog/" # Using Liquibase for database migrations
+    - "src/test/java/com/pricetracker/app/"
+    - "src/test/resources/"
+
+# Required Base Files (Adapt path com/pricetracker/app as needed)
+required_files:
+  enforce_file_existence:
+    - "pom.xml"
+    - "src/main/resources/application.yml"
+    - "src/main/resources/db/changelog/db.changelog-master.xml" # Liquibase master changelog
+    - "src/main/java/com/pricetracker/app/PriceTrackerApplication.java" # Main Application Class
+    - "src/main/java/com/pricetracker/app/config/SecurityConfig.java"
+    - "src/main/java/com/pricetracker/app/config/WebConfig.java" # For CORS, potentially other web settings
+    - "src/main/java/com/pricetracker/app/exception/GlobalExceptionHandler.java"
+    - "src/main/java/com/pricetracker/app/security/UserDetailsServiceImpl.java" # Implements UserDetailsService
+    - "src/main/java/com/pricetracker/app/security/jwt/JwtService.java" # Interface/Impl for JWT operations
+    - "src/main/java/com/pricetracker/app/security/jwt/JwtAuthenticationFilter.java"
+    - "src/main/java/com/pricetracker/app/controller/AuthController.java" # Handles login/registration
+    - "src/main/java/com/pricetracker/app/controller/ProductTrackingController.java" # Handles tracking operations
+    - "src/main/java/com/pricetracker/app/entity/User.java"
+    - "src/main/java/com/pricetracker/app/entity/Product.java" # Stores unique product info
+    - "src/main/java/com/pricetracker/app/entity/TrackedProduct.java" # Links User and Product, stores target price
+    - "src/main/java/com/pricetracker/app/entity/PriceHistory.java" # Stores historical prices
+    - "src/main/java/com/pricetracker/app/repository/UserRepository.java"
+    - "src/main/java/com/pricetracker/app/repository/ProductRepository.java"
+    - "src/main/java/com/pricetracker/app/repository/TrackedProductRepository.java"
+    - "src/main/java/com/pricetracker/app/repository/PriceHistoryRepository.java"
+    - "src/main/java/com/pricetracker/app/service/ScraperService.java" # Contains Jsoup scraping logic
+    - "src/main/java/com/pricetracker/app/scheduling/PriceCheckScheduler.java" # Contains @Scheduled task
+
+    - "src/main/java/com/pricetracker/app/dto/response/ApiResponse.java" # Standard wrapper

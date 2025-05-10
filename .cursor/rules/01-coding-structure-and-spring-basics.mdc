@@ -1,0 +1,48 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# --- I. DEVELOPMENT GUIDELINES & BEST PRACTICES (Partial) ---
+
+# Code Style and Structure
+# Priority: Personal Rules > Cursor Directory Rules
+code_style_and_structure:
+  general:
+    - Write clean, efficient, well-documented, and maintainable Java code.
+  project_structure:
+    layout: Standard Maven project layout.
+    organization: >
+      Organize code using package-by-feature or a clear layered approach
+      (config, controller, service, repository, entity, dto, exception, security, util, scraping).
+      Ensure consistency. See project-structure.yml for enforced structure.
+    naming_conventions_file: naming-conventions.yml
+    configuration_file: configuration.yml (`application.yml`)
+    build_file: build-dependencies.yml (`pom.xml`)
+  layer_guidelines:
+    controller: Handles incoming HTTP requests, delegates to services, maps DTOs. Use `@RestController`.
+    service: Contains business logic, transaction management (`@Service`, `@Transactional`).
+    repository: Data access layer using Spring Data JPA interfaces (extending `JpaRepository` or similar). Use `@Repository`.
+    entity: JPA entities representing database tables (`@Entity`).
+    dto: Data Transfer Objects for API request/response payloads. Use Java Records where applicable.
+    exception: Custom exception classes and global exception handling (`@ControllerAdvice`, `@ExceptionHandler`). See error-handling.yml.
+    config: Configuration classes (`@Configuration`), including Security, Web, Mail, etc.
+    security: Classes related to Spring Security, JWT handling, `UserDetailsService`. See security.yml.
+    scraping: Contains logic specifically for web scraping using Jsoup. See scraping.yml.
+    util: Utility classes.
+  dependency_injection:
+    method: Constructor injection for mandatory dependencies.
+    avoid: Field injection.
+  solid_principles: Adhere to SOLID principles for maintainable and flexible design (High Cohesion, Low Coupling).
+  java_version: Utilize Java 17+ features where appropriate (records, sealed classes, pattern matching, text blocks).
+
+# Spring Boot Specifics (General)
+# Priority: Combined Rules
+spring_boot_general:
+  starters: Use Spring Boot starters extensively (`spring-boot-starter-web`, `data-jpa`, `security`, `mail`, `validation`, `test`).
+  annotations:
+    general: Implement proper annotation usage (`@SpringBootApplication`, `@RestController`, `@Service`, `@Repository`, `@Configuration`, `@Value`, `@Scheduled`).
+    dependency_injection: Prefer constructor injection over `@Autowired` on fields.
+  auto_configuration: Leverage auto-configuration effectively but provide custom beans when necessary (`@Bean` in `@Configuration` classes).
+
+  configuration_properties: Use `@ConfigurationProperties` for type-safe binding of configuration values to Java objects. See configuration.yml.

@@ -1,0 +1,25 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Error Handling
+# Priority: Combined Rules
+error_handling:
+  centralized_handler: Implement centralized exception handling using a class annotated with `@ControllerAdvice`.
+  exception_handlers: Use methods annotated with `@ExceptionHandler` within the `@ControllerAdvice` class to handle specific custom and framework exceptions.
+  custom_exceptions: Define specific custom exception classes (e.g., extending `RuntimeException`) for different error scenarios:
+    - `ResourceNotFoundException` (e.g., User, Product, TrackedProduct not found) -> Map to 404 Not Found.
+    - `ScrapingException` (e.g., failed to parse or connect) -> Map to 500 Internal Server Error or 400 Bad Request if URL related.
+    - `UserAlreadyExistsException` -> Map to 409 Conflict or 400 Bad Request.
+    - `InvalidCredentialsException` (or rely on Spring Security's `AuthenticationException` handling) -> Map to 401 Unauthorized.
+    - `ValidationException` (from `@Valid` failures, handled by `MethodArgumentNotValidException`) -> Map to 400 Bad Request.
+    - Generic `AppException` or similar for other internal errors -> Map to 500 Internal Server Error.
+  response_format: All exception handlers MUST return the standard `ApiResponse` format (defined in `api-design.yml`) with:
+    - `status`: "ERROR"
+    - `code`: Appropriate HTTP status code (e.g., 400, 401, 404, 500)
+    - `message`: A clear, user-friendly error message.
+    - `data`: null (usually for errors)
+    - `timestamp`: Current timestamp.
+
+  logging: Log the full exception stack trace at the appropriate level (e.g., ERROR for 5xx, WARN or INFO for 4xx) within the exception handler or via default logging configuration.

@@ -1,0 +1,63 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# --- V. BUSINESS LOGIC REQUIREMENTS ---
+
+business_logic:
+  user_registration:
+    - Validate input DTO (`RegisterRequest`).
+    - Check if username or email already exists in the database (`UserRepository`).
+    - If exists, throw `UserAlreadyExistsException`.
+    - Hash the password using `BCryptPasswordEncoder`.
+    - Create a new `User` entity, set roles (e.g., "ROLE_USER"), set enabled=true.
+    - Save the user using `UserRepository`.
+    - Return `UserResponse` (excluding password hash).
+  user_login:
+    - Authenticate user via Spring Security's `AuthenticationManager` (using username/password from `LoginRequest`).
+    - Handle `AuthenticationException` (e.g., `BadCredentialsException`) -> return 401 Unauthorized.
+    - On successful authentication, retrieve the authenticated `UserDetails`/`User`.
+    - Generate JWT access token using `JwtService`.
+    - (If implemented) Generate JWT refresh token, store it securely (e.g., `RefreshToken` entity).
+    - Return `AuthResponse` containing tokens and user details.
+  add_product_tracking:
+    - Get the currently authenticated user.
+    - Validate input `TrackProductRequest`.
+    - Check if the user is already tracking this specific `productUrl`. If yes, throw an exception or return existing tracking info.
+    - Find `Product` by `productUrl` (`ProductRepository`).
+    - If `Product` does not exist:
+      - Call `ScraperService.scrapeProductDetails(productUrl)` to get initial name, image, price. Handle scraping failures.
+      - Create and save a new `Product` entity.
+    - If `Product` exists, optionally trigger a fresh scrape via `ScraperService.scrapePrice(productUrl)` to update `Product.lastCheckedPrice` and create a `PriceHistory` record if the price changed.
+    - Create a new `TrackedProduct` entity linking the `User` and `Product`.
+    - Set `desiredPrice` and `notificationEnabled` from the request.
+    - Save the `TrackedProduct` using `TrackedProductRepository`.
+    - Return `TrackedProductResponse`.
+  scheduled_price_check: # (Implementation: PriceCheckScheduler using @Scheduled)
+    - Define a scheduled task (e.g., `@Scheduled(fixedRateString = "${app.scheduling.checkRateMs}")`).
+    - Fetch all unique `Product` entities that have at least one active `TrackedProduct` associated with them (or fetch all Products and check tracking status later).
+    - For each `Product`:
+      - Call `ScraperService.scrapePrice(product.getProductUrl())`. Handle exceptions gracefully (log errors, skip product for this run).
+      - If scraping is successful and a `scrapedPrice` is obtained:
+        - Compare `scrapedPrice` with `product.getLastCheckedPrice()`.
+        - If the price is different (or `lastCheckedPrice` is null):
+          - Update `product.setLastCheckedPrice(scrapedPrice)`.
+          - Create a new `PriceHistory` record for this product and price.
+          - Save the updated `Product` and the new `PriceHistory`.
+          - Trigger alerting logic (see below).
+  alerting_logic: # (Called after a successful price update during scheduled check)
+    - Find all `TrackedProduct` entries for the updated `Product` where `notificationEnabled` is true (`TrackedProductRepository`).
+    - For each such `TrackedProduct`:
+      - Check if `scrapedPrice <= trackedProduct.getDesiredPrice()`.
+      - Check if a notification for this condition was sent recently (e.g., check `trackedProduct.getLastNotifiedAt()` or an `Alert` log) to avoid spamming. Define a cooldown period.
+      - If price condition met and notification cooldown passed:
+        - Call `NotificationService.sendPriceAlert(trackedProduct, scrapedPrice)`.
+        - Update `trackedProduct.setLastNotifiedAt(Instant.now())` or log the alert. Save the updated `TrackedProduct`.
+  notification_service: # (Implementation: NotificationService)
+    - Use Spring's `JavaMailSender`.
+    - Implement a method `sendPriceAlert(TrackedProduct trackedProduct, BigDecimal currentPrice)`.
+    - Format an email (HTML or plain text) containing product details (name, URL, image), desired price, and current price.
+    - Send the email to `trackedProduct.getUser().getEmail()`.
+    - Handle potential `MailException`s (log errors).
+    - Consider making the send operation asynchronous (`@Async`). See `async-scalability.yml`.

@@ -1,0 +1,48 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# ROLE DEFINITION
+# Combines expertise from general Spring Boot best practices and specific backend development requirements.
+# Prioritizes the specific needs of the Price Tracker application.
+role_definition:
+  title: Senior Backend Developer
+  expertise:
+    - Java (17+)
+    - Spring Boot (3.x+)
+    - Spring Framework
+    - Spring Data JPA
+    - Spring Security
+    - RESTful API design
+    - Maven
+    - JUnit 5
+    - Mockito
+    - Jsoup
+    - PostgreSQL/MySQL
+    - Docker
+    - Related backend technologies
+  specialization: Building robust, scalable, and maintainable backend systems
+  application_focus: Price Tracker Application
+
+# --- PROJECT CONTEXT: PRICE TRACKER APPLICATION ---
+project_context:
+  goal: Develop a price tracker allowing users to monitor product prices from online retailers via URL, receive alerts on price drops, visualize history, and eventually leverage AI for trends/predictions.
+  core_tech:
+    backend: Spring Boot
+    frontend: React
+    ai_service: Python
+    scraping: Jsoup
+    database: PostgreSQL/MySQL
+  key_features:
+    - User Authentication
+    - Product Tracking (URL-based)
+    - Automated Price Scraping (Jsoup)
+    - Price History
+    - Target Price Email Alerts
+  future_features:
+    - AI Integration
+    - Mobile App
+    - Advanced Notifications
+
+    - Scalability enhancements (Microservices, Message Queues)

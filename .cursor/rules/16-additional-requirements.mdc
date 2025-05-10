@@ -1,0 +1,24 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# --- VI. ADDITIONAL REQUIREMENTS ---
+
+additional_requirements:
+  containerization:
+    dockerfile: Provide a functional `Dockerfile` for building a container image of the Spring Boot application.
+    docker_compose: Include the application service in the `docker-compose.yml` described in the overall project plan (linking to database, etc.).
+  database_choice_clarification:
+    default: Default to PostgreSQL.
+    compatibility: Ensure Spring Data JPA/Hibernate configuration and entity definitions are largely compatible with MySQL. Minimal changes expected (driver dependency, dialect property in `application.yml`).
+  readme:
+    file: `README.md`
+    content: Generate a basic README.md file explaining:
+      - Project overview.
+      - Prerequisites (Java version, Maven, Docker).
+      - Setup instructions (cloning, configuration).
+      - Build instructions (`mvn clean install`).
+      - Run instructions (using `java -jar`, using Maven plugin, using Docker).
+
+      - API documentation access (Swagger UI URL).

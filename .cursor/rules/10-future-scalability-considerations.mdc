@@ -1,0 +1,16 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Asynchronous Processing & Scalability (Future Considerations)
+async_scalability:
+  async_tasks:
+    annotation: Use Spring's `@Async` annotation for potentially long-running, non-blocking tasks (like sending emails, complex scraping jobs) where appropriate.
+    configuration: Configure thread pools properly using `@EnableAsync` and defining a `TaskExecutor` bean if customization is needed.
+  reactive_programming:
+    consideration: Consider reactive programming (Spring WebFlux) if high concurrency and non-blocking I/O become critical requirements later. This is a significant architectural shift.
+  message_queues:
+    planning: Plan for potential introduction of Message Queues (RabbitMQ/Kafka).
+
+    use_cases: Decouple scraping, notification, and AI tasks for better scalability, resilience, and independent processing.

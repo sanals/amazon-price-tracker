@@ -1,0 +1,70 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Configuration (application.yml)
+# Priority: Personal Rules > Cursor Directory Rules
+configuration_file:
+  location: `src/main/resources/application.yml`
+  profiles:
+    usage: Use Spring Profiles (`spring.profiles.active`) for environment-specific settings (dev, test, prod).
+    files: Create separate files like `application-dev.yml`, `application-test.yml`, `application-prod.yml`.
+  required_sections:
+    server:
+      port: (e.g., 8080)
+      servlet.context-path: (e.g., /api/v1) # Recommended base path
+    spring:
+      application.name: price-tracker-service # Example name
+      datasource:
+        url: DB connection URL (specific to profile)
+        username: DB username (specific to profile)
+        password: DB password (use secrets management in prod)
+        driver-class-name: (e.g., `org.postgresql.Driver` or `com.mysql.cj.jdbc.Driver`)
+      jpa:
+        hibernate.ddl-auto: validate # (update/create-drop for dev/test, none for prod)
+        show-sql: false # (true for dev/debug if needed)
+        properties.hibernate.dialect: (e.g., `org.hibernate.dialect.PostgreSQLDialect`)
+      # Optional: SQL init mode if not using migrations primarily
+      # sql.init.mode: always # or embedded
+      mail:
+        host: SMTP host
+        port: SMTP port
+        username: Mail username
+        password: Mail password
+        properties.mail.smtp.*: (e.g., auth, starttls.enable)
+      # Spring Security related configs might go here if needed
+      profiles:
+        active: dev # Default profile
+      # Liquibase configuration
+      liquibase:
+        enabled: true # or false
+        change-log: classpath:db/changelog/db.changelog-master.xml
+      # Logging configuration
+      logging:
+        level:
+          root: INFO
+          com.pricetracker.app: DEBUG # Example package level
+          org.springframework.web: INFO
+          org.hibernate: WARN
+      # Actuator Endpoint Exposure
+      management:
+        endpoints.web.exposure.include: health, info, metrics # Comma-separated list
+    # API Documentation Configuration (Springdoc)
+    springdoc:
+      api-docs.path: /api-docs # Default: /v3/api-docs
+      swagger-ui.path: /swagger-ui.html
+    # Custom Application Properties (Type-safe binding recommended)
+    api:
+      jwt:
+        secret-key: ${JWT_SECRET_KEY:defaultValue} # Use environment variables or secrets management
+        access-token-expiration-ms: 3600000 # 1 hour
+        refresh-token-expiration-ms: 604800000 # 7 days (if implemented)
+    app:
+      scraper:
+        user-agent: PriceTrackerBot/1.0 (+http://yourdomain.com/bot-info) # Example
+        default-delay-ms: 1000 # Example delay between requests
+      frontend-url: http://localhost:3000 # For CORS configuration
+
+
+      ai-service-url: http://localhost:5001/predict # Example endpoint

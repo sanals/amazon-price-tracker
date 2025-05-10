@@ -1,0 +1,31 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Build and Dependency Management
+# Priority: Combined Rules
+build_and_dependencies:
+  build_tool: Maven (`pom.xml`).
+  required_dependencies:
+    parent: org.springframework.boot:spring-boot-starter-parent
+    web: org.springframework.boot:spring-boot-starter-web
+    data_jpa: org.springframework.boot:spring-boot-starter-data-jpa
+    security: org.springframework.boot:spring-boot-starter-security
+    validation: org.springframework.boot:spring-boot-starter-validation
+    mail: org.springframework.boot:spring-boot-starter-mail
+    test: org.springframework.boot:spring-boot-starter-test # (includes JUnit 5, Mockito, AssertJ, Spring Test)
+    scraping: org.jsoup:jsoup # Mandatory for scraping
+    database_driver_postgres: org.postgresql:postgresql # Include based on DB choice
+    database_driver_mysql: com.mysql:mysql-connector-j # Include based on DB choice
+    test_database: com.h2database:h2 (Scope: test)
+    lombok: org.projectlombok:lombok (Optional, scope: provided or compileOnly)
+    jwt:
+      - io.jsonwebtoken:jjwt-api
+      - io.jsonwebtoken:jjwt-impl
+      - io.jsonwebtoken:jjwt-jackson # (For JWT handling via jjwt library)
+    api_docs: org.springdoc:springdoc-openapi-starter-webmvc-ui # (Swagger/OpenAPI v3)
+    actuator: org.springframework.boot:spring-boot-starter-actuator
+    migrations: org.liquibase:liquibase-core # Using Liquibase for database migrations
+
+  build_profiles: Define build profiles in `pom.xml` if needed for environment-specific build differences (e.g., packaging, plugin configurations).
