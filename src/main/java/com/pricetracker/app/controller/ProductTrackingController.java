@@ -13,6 +13,12 @@ import com.pricetracker.app.exception.ResourceNotFoundException;
 import com.pricetracker.app.repository.PriceHistoryRepository;
 import com.pricetracker.app.repository.ProductRepository;
 import com.pricetracker.app.service.ProductTrackingService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,6 +35,7 @@ import java.time.Instant;
 @RestController
 @RequestMapping("/track")
 @RequiredArgsConstructor
+@Tag(name = "Product Tracking", description = "API for tracking product prices")
 public class ProductTrackingController {
     
     private final ProductTrackingService productTrackingService;
@@ -39,9 +46,14 @@ public class ProductTrackingController {
      * Add a new product URL to track for a user.
      */
     @PostMapping
+    @Operation(summary = "Track a new product", description = "Add a new product URL to track for a specific user")
+    @ApiResponses(value = {
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Product successfully tracked"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request")
+    })
     public ResponseEntity<ApiResponse<TrackedProductResponse>> addProductTracking(
-            @RequestParam Long userId,
-            @RequestBody TrackProductRequest request) {
+            @Parameter(description = "User ID") @RequestParam Long userId,
+            @Parameter(description = "Product tracking details") @RequestBody TrackProductRequest request) {
         
         TrackedProduct trackedProduct = productTrackingService.addProductTracking(userId, request);
         TrackedProductResponse response = mapToTrackedProductResponse(trackedProduct);
@@ -54,8 +66,9 @@ public class ProductTrackingController {
      * Get all tracked products for a user.
      */
     @GetMapping("/user/{userId}")
+    @Operation(summary = "Get tracked products", description = "Retrieve all products tracked by a specific user")
     public ResponseEntity<ApiResponse<Page<TrackedProductResponse>>> getTrackedProducts(
-            @PathVariable Long userId,
+            @Parameter(description = "User ID") @PathVariable Long userId,
             Pageable pageable) {
         
         Page<TrackedProduct> trackedProducts = productTrackingService.getTrackedProductsForUser(userId, pageable);
@@ -68,9 +81,10 @@ public class ProductTrackingController {
      * Get a specific tracked product by ID.
      */
     @GetMapping("/{trackedProductId}/user/{userId}")
+    @Operation(summary = "Get specific tracked product", description = "Get details of a specific product tracking entry")
     public ResponseEntity<ApiResponse<TrackedProductResponse>> getTrackedProduct(
-            @PathVariable Long trackedProductId,
-            @PathVariable Long userId) {
+            @Parameter(description = "Tracked product ID") @PathVariable Long trackedProductId,
+            @Parameter(description = "User ID") @PathVariable Long userId) {
         
         TrackedProduct trackedProduct = productTrackingService.getTrackedProductById(userId, trackedProductId)
                 .orElseThrow(() -> new ResourceNotFoundException("TrackedProduct", "id", trackedProductId));
@@ -83,10 +97,11 @@ public class ProductTrackingController {
      * Update a tracked product's desired price or notification status.
      */
     @PutMapping("/{trackedProductId}/user/{userId}")
+    @Operation(summary = "Update tracked product", description = "Update the desired price or notification settings for a tracked product")
     public ResponseEntity<ApiResponse<TrackedProductResponse>> updateTrackedProduct(
-            @PathVariable Long trackedProductId,
-            @PathVariable Long userId,
-            @RequestBody UpdateTrackedProductRequest request) {
+            @Parameter(description = "Tracked product ID") @PathVariable Long trackedProductId,
+            @Parameter(description = "User ID") @PathVariable Long userId,
+            @Parameter(description = "Updated tracking details") @RequestBody UpdateTrackedProductRequest request) {
         
         TrackedProduct updatedTrackedProduct = 
                 productTrackingService.updateTrackedProduct(userId, trackedProductId, request);
@@ -99,9 +114,10 @@ public class ProductTrackingController {
      * Delete (stop tracking) a product.
      */
     @DeleteMapping("/{trackedProductId}/user/{userId}")
+    @Operation(summary = "Delete tracked product", description = "Stop tracking a product")
     public ResponseEntity<ApiResponse<Void>> deleteTrackedProduct(
-            @PathVariable Long trackedProductId,
-            @PathVariable Long userId) {
+            @Parameter(description = "Tracked product ID") @PathVariable Long trackedProductId,
+            @Parameter(description = "User ID") @PathVariable Long userId) {
         
         productTrackingService.deleteTrackedProduct(userId, trackedProductId);
         return ResponseEntity.status(HttpStatus.NO_CONTENT)
@@ -113,8 +129,9 @@ public class ProductTrackingController {
      * Note: This endpoint currently has no user association check.
      */
     @GetMapping("/product/{productId}/history")
+    @Operation(summary = "Get price history", description = "Retrieve price history for a specific product")
     public ResponseEntity<ApiResponse<Page<PriceHistoryResponse>>> getPriceHistory(
-            @PathVariable Long productId,
+            @Parameter(description = "Product ID") @PathVariable Long productId,
             Pageable pageable) {
         
         Page<PriceHistory> priceHistoryPage = 

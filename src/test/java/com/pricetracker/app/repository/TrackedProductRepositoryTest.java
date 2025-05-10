@@ -131,7 +131,7 @@ class TrackedProductRepositoryTest {
 
     private Product createTestProduct() {
         Product product = new Product();
-        product.setProductUrl("https://example.com/product");
+        product.setProductUrl("https://example.com/product/" + java.util.UUID.randomUUID().toString());
         product.setName("Test Product");
         return entityManager.persist(product);
     }

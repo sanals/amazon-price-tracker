@@ -71,7 +71,11 @@ public class PriceCheckScheduler {
                     
                     // Check if any notifications need to be sent
                     if (isPriceDrop(product.getLastCheckedPrice(), scrapedPrice)) {
+                        log.debug("Price drop detected for product {}: {} -> {}", 
+                            product.getId(), product.getLastCheckedPrice(), scrapedPrice);
                         sendNotifications(product, scrapedPrice);
+                    } else {
+                        log.debug("Price changed but not a drop for product {}, no notifications needed", product.getId());
                     }
                 }
             });
@@ -114,14 +118,26 @@ public class PriceCheckScheduler {
         List<TrackedProduct> trackedProducts = trackedProductRepository
             .findByProductIdAndNotificationEnabledTrue(product.getId());
         
+        log.debug("Found {} tracked products with notifications enabled for product {}", 
+            trackedProducts.size(), product.getId());
+        
         Instant now = Instant.now();
         Duration cooldownDuration = Duration.ofHours(notificationCooldownHours);
         
         for (TrackedProduct trackedProduct : trackedProducts) {
+            log.debug("Checking tracked product ID: {}, Desired price: {}, Current price: {}", 
+                trackedProduct.getId(), trackedProduct.getDesiredPrice(), currentPrice);
+                
             if (currentPrice.compareTo(trackedProduct.getDesiredPrice()) <= 0) {
+                log.debug("Price {} is below or equal to desired price {} for tracked product {}", 
+                    currentPrice, trackedProduct.getDesiredPrice(), trackedProduct.getId());
+                
                 // Check if we should send a notification (based on cooldown)
                 boolean shouldNotify = trackedProduct.getLastNotifiedAt() == null || 
                     Duration.between(trackedProduct.getLastNotifiedAt(), now).compareTo(cooldownDuration) > 0;
+                
+                log.debug("Cooldown check for tracked product {}: lastNotifiedAt={}, shouldNotify={}", 
+                    trackedProduct.getId(), trackedProduct.getLastNotifiedAt(), shouldNotify);
                 
                 if (shouldNotify) {
                     log.debug("Sending price drop notification to user {} for product {}", 
@@ -134,6 +150,9 @@ public class PriceCheckScheduler {
                     log.debug("Skipping notification for user {} for product {} (cooldown period active)", 
                         trackedProduct.getUserId(), product.getId());
                 }
+            } else {
+                log.debug("Price {} is NOT below desired price {} for tracked product {}, no notification needed", 
+                    currentPrice, trackedProduct.getDesiredPrice(), trackedProduct.getId());
             }
         }
     }

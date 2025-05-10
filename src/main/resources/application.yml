@@ -57,4 +57,15 @@ app:
     default-delay-ms: 1000  # 1 second delay between requests
     user-agent: "PriceTrackerBot/1.0 (+http://pricetracker.example.com/bot-info)"
   notification:
-    cooldown-hours: 24  # Set a 24-hour cooldown between notifications for the same product/user 
+    cooldown-hours: 24  # Set a 24-hour cooldown between notifications for the same product/user
+
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui
+    enabled: true
+    operations-sorter: alpha
+    tags-sorter: alpha
+    disable-swagger-default-url: true 
