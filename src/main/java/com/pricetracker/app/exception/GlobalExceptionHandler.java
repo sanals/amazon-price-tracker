@@ -5,6 +5,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.LockedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -40,6 +44,50 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(ex.getMessage(), HttpStatus.CONFLICT.value()));
+    }
+    
+    /**
+     * Handles BadCredentialsException, returning a 401 Unauthorized response.
+     */
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ApiResponse<Object>> handleBadCredentialsException(BadCredentialsException ex) {
+        log.warn("Authentication failed: Bad credentials");
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error("Invalid username or password", HttpStatus.UNAUTHORIZED.value()));
+    }
+    
+    /**
+     * Handles DisabledException, returning a 401 Unauthorized response.
+     */
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<ApiResponse<Object>> handleDisabledException(DisabledException ex) {
+        log.warn("Authentication failed: Account disabled");
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error("Your account is disabled", HttpStatus.UNAUTHORIZED.value()));
+    }
+    
+    /**
+     * Handles LockedException, returning a 401 Unauthorized response.
+     */
+    @ExceptionHandler(LockedException.class)
+    public ResponseEntity<ApiResponse<Object>> handleLockedException(LockedException ex) {
+        log.warn("Authentication failed: Account locked");
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error("Your account is locked", HttpStatus.UNAUTHORIZED.value()));
+    }
+    
+    /**
+     * Handles other AuthenticationException types, returning a 401 Unauthorized response.
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAuthenticationException(AuthenticationException ex) {
+        log.warn("Authentication failed: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error("Authentication failed: " + ex.getMessage(), HttpStatus.UNAUTHORIZED.value()));
     }
     
     /**

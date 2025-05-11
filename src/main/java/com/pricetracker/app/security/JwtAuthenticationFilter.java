@@ -64,13 +64,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // If username exists and no authentication exists in context
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            // Load user details
+            // Load user details - this will be our User entity directly since we updated UserDetailsServiceImpl
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
             // Validate token
             if (jwtService.isTokenValid(jwt, userDetails)) {
                 // Create authentication token with user details and authorities
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails,
+                        userDetails,  // This will be our User entity since UserDetailsServiceImpl returns User
                         null,
                         userDetails.getAuthorities());
                 // Set details from request

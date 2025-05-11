@@ -57,11 +57,8 @@ public class AuthServiceImpl implements AuthService {
         
         SecurityContextHolder.getContext().setAuthentication(authentication);
         
-        // Instead of casting, fetch the user from the repository
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found with username: " + request.getUsername()));
-
-        // User user = (User) authentication.getPrincipal();
+        // Use direct casting since our User entity is now the principal
+        User user = (User) authentication.getPrincipal();
         
         // Update last login time
         user.setLastLogin(LocalDateTime.now());
