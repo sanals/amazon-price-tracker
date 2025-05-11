@@ -11,8 +11,6 @@ import com.pricetracker.app.repository.TrackedProductRepository;
 import com.pricetracker.app.scraping.ProductDetails;
 import com.pricetracker.app.scraping.ScraperService;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -23,8 +21,6 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class ProductTrackingService {
-    
-    private static final Logger log = LoggerFactory.getLogger(ProductTrackingService.class);
     
     private final ProductRepository productRepository;
     private final TrackedProductRepository trackedProductRepository;
