@@ -503,7 +503,7 @@ Access the generated docs at `/swagger-ui.html`.
 **Prompt 16: Implement Controller Integration Tests**
 
 ```prompt
-Based on `08-testing.yml`, implement integration tests for `ProductTrackingController` using `@SpringBootTest`, `@AutoConfigureMockMvc`, and `MockMvc`.
+Based on `06-testing.mdc`, implement integration tests for `ProductTrackingController` using `@SpringBootTest`, `@AutoConfigureMockMvc`, and `MockMvc`.
 
 Create `ProductTrackingControllerTest.java` in `src/test/java/com.pricetracker.app/controller/`.
 - Mock the `ProductTrackingService` bean using `@MockBean`.
