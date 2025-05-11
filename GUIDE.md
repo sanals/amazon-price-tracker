@@ -348,3 +348,165 @@ As mentioned in the previous section, use the price history endpoint to see the 
 ```
 GET /api/v1/track/product/{productId}/history?page=0&size=20&sort=timestamp,desc
 ```
+
+## Troubleshooting Common Price Tracking Issues
+
+### Database Connection Issues
+
+If you're not seeing price history being recorded or the application fails to start:
+
+1. **Database credentials**: Verify your database credentials in `application.yml`:
+   ```yaml
+   spring:
+     datasource:
+       url: jdbc:postgresql://localhost:5432/price_tracker_db
+       username: postgres
+       password: root
+       driver-class-name: org.postgresql.Driver
+   ```
+
+2. **Database existence**: Make sure the `price_tracker_db` database exists:
+   ```sql
+   CREATE DATABASE price_tracker_db;
+   ```
+
+3. **Connection test**: Test PostgreSQL connection directly:
+   ```
+   psql -U postgres -d price_tracker_db -h localhost -W
+   ```
+
+4. **Security settings**: Ensure your PostgreSQL `pg_hba.conf` allows password authentication for local connections.
+
+### Price Scraping Not Working
+
+If prices aren't being scraped or updated correctly:
+
+1. **Test specific URLs**: Use the test endpoint to check if scraping works for specific URLs:
+   ```
+   GET /api/v1/test/scrape?url=https://www.amazon.com/product
+   ```
+
+2. **CSS selectors**: The application uses general CSS selectors to find prices which may not work for all sites. Check `JsoupScraperService.java` and see if specific selectors for your target website are missing.
+
+3. **Site blocking**: Some websites actively block scrapers. Ensure `app.scraper.user-agent` in `application.yml` is set to something reasonable.
+
+4. **Website structure changes**: Retail websites frequently update their HTML structure. You may need to update the selectors in the scraper service.
+
+5. **Response content**: Use the browser's "View Source" feature to see if the price elements are actually in the HTML or if they're loaded via JavaScript (which Jsoup can't handle).
+
+### Price History Not Being Updated
+
+If price scraping works but history isn't being recorded:
+
+1. **Scheduler running**: Check if the scheduler is running properly - it's configured to run every 6 seconds by default (30000ms in application.yml but can be overridden):
+   ```yaml
+   app:
+     scheduling:
+       checkRateMs: 30000  # milliseconds
+   ```
+
+2. **Verify price changes**: Price history is only recorded when a price change is detected. If prices remain the same, no new records are created.
+
+3. **Test scheduler manually**: Use the test endpoint to manually trigger the scheduler:
+   ```
+   POST /api/v1/test/run-scheduler
+   ```
+
+4. **Check database tables**: Query your database to see if price history records exist:
+   ```sql
+   SELECT * FROM price_history ORDER BY timestamp DESC LIMIT 10;
+   SELECT * FROM products ORDER BY updated_at DESC LIMIT 10;
+   ```
+
+5. **Transaction issues**: If using PostgreSQL, ensure the database user has proper rights to perform transaction operations.
+
+### Amazon India (and other specific sites) Scraping
+
+For sites with complex or regularly changing structures like Amazon:
+
+1. **Use specialized strategies**: The application includes an `AmazonScraperStrategy` specifically tailored for Amazon sites. For other specific sites, consider implementing similar strategies.
+
+2. **Regular expression patterns**: The Amazon strategy uses regex patterns like:
+   ```java
+   private static final Pattern PRICE_PATTERN = Pattern.compile("(?:₹|Rs\\.?|INR)?\\s*([\\d,]+(?:\\.\\d+)?)");
+   ```
+   This allows it to extract prices in various formats (₹4,599.00, ₹4,599, 4599).
+
+3. **Custom selectors**: For Amazon, specific selectors are defined:
+   ```java
+   private static final List<String> PRICE_SELECTORS = Arrays.asList(
+       ".priceToPay .a-offscreen",
+       ".apexPriceToPay .a-offscreen",
+       // ... more selectors
+   );
+   ```
+
+4. **Fallback methods**: The strategy employs multiple fallback methods, trying different approaches if primary selectors fail.
+
+### Recommended Changes for Better Scraping Performance
+
+1. **Frequency adjustment**: Consider changing the scheduler frequency to be less aggressive (every 1-6 hours instead of every 6 seconds) to avoid being blocked by websites:
+   ```yaml
+   app:
+     scheduling:
+       checkRateMs: 3600000  # 1 hour in milliseconds
+   ```
+
+2. **Site-specific strategies**: Implement more site-specific strategies for retail websites you frequently track.
+
+3. **Better error handling**: Enhance error logging to pinpoint exactly which part of the scraping process is failing.
+
+4. **HTTP proxy rotation**: For production use, consider implementing proxy rotation to avoid IP blocks for frequent requests.
+
+5. **Storage optimization**: Implement logic to store price history with reduced frequency over time (e.g., daily averages for older data).
+
+### Handling Amazon Shortened URLs
+
+If you're tracking products from Amazon with shortened URLs (like amzn.in or a.co), you may encounter HTTP 500 errors:
+
+```
+HTTP error 500 for URL: https://amzn.in/d/bA9iHdh
+```
+
+This occurs because:
+
+1. **URL Redirection Issues**: Shortened URLs need redirection handling
+2. **Anti-Scraping Measures**: Amazon detects and blocks automated requests
+3. **User-Agent Detection**: Amazon rejects requests that identify as bots
+
+The application has been enhanced to handle these issues by:
+
+1. **URL Expansion**: Automatically expanding shortened URLs before scraping
+2. **Browser-Like Headers**: Using realistic browser headers and rotating user agents
+3. **Random Delays**: Adding random delays between requests to appear more human-like
+
+Best practices for tracking Amazon products:
+
+1. **Use Full URLs**: When possible, use full Amazon product URLs instead of shortened ones
+   ```
+   ✅ https://www.amazon.in/Apple-iPhone-13-128GB-Midnight/dp/B09G9HD6PD
+   ❌ https://amzn.in/d/bA9iHdh
+   ```
+
+2. **Adjust Scraping Frequency**: Set the `app.scheduling.checkRateMs` to a reasonable value (at least 1 hour)
+   ```yaml
+   app:
+     scheduling:
+       checkRateMs: 3600000  # 1 hour in milliseconds
+   ```
+
+3. **Test URLs First**: Use the test endpoint before adding URLs to track
+   ```
+   GET /api/v1/test/scrape?url=https://www.amazon.in/Apple-iPhone-13-128GB-Midnight/dp/B09G9HD6PD
+   ```
+
+4. **Use Regional Domains**: Ensure you're using the correct regional domain (amazon.in for India, amazon.com for US)
+
+For Amazon India specifically, you can use the specialized test endpoint:
+```
+GET /api/v1/test/scrape-amazon-india?url=https://www.amazon.in/product
+```
+
+If you're still experiencing issues, try using the local HTML file testing approach:
+1. Save the product page HTML locally
+2. Test it with: `GET /api/v1/test/scrape-amazon-india?useFile=true`

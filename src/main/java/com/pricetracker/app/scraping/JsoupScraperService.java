@@ -12,8 +12,14 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.SocketTimeoutException;
+import java.net.URI;
 import java.net.UnknownHostException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 
 /**
  * Implementation of ScraperService using Jsoup library.
@@ -22,9 +28,18 @@ import java.util.Optional;
 public class JsoupScraperService implements ScraperService {
     
     private static final Logger log = LoggerFactory.getLogger(JsoupScraperService.class);
+    private static final Random random = new Random();
+    
+    // Common browser user agents for rotation
+    private static final String[] BROWSER_USER_AGENTS = {
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Safari/605.1.15",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0"
+    };
     
     @Value("${app.scraper.user-agent}")
-    private String userAgent;
+    private String configuredUserAgent;
     
     @Override
     public Optional<BigDecimal> scrapePrice(String productUrl) {
@@ -53,10 +68,46 @@ public class JsoupScraperService implements ScraperService {
     }
     
     private Document fetchDocument(String url) throws IOException {
+        // Expand shortened URLs (like amzn.in) first
+        if (url.contains("amzn.in") || url.contains("a.co")) {
+            log.debug("Detected shortened Amazon URL: {}, expanding it", url);
+            url = expandShortenedUrl(url);
+            log.debug("Expanded URL: {}", url);
+        }
+        
+        // Add random delay to avoid detection (between 1-3 seconds)
         try {
+            Thread.sleep(1000 + random.nextInt(2000));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        // Select a random user agent
+        String userAgent = getRandomUserAgent();
+        
+        try {
+            // Create a map of headers that mimic a real browser
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
+            headers.put("Accept-Language", "en-US,en;q=0.5");
+            headers.put("Referer", "https://www.google.com/");
+            headers.put("DNT", "1");
+            headers.put("Connection", "keep-alive");
+            headers.put("Upgrade-Insecure-Requests", "1");
+            headers.put("Sec-Fetch-Dest", "document");
+            headers.put("Sec-Fetch-Mode", "navigate");
+            headers.put("Sec-Fetch-Site", "cross-site");
+            headers.put("Pragma", "no-cache");
+            headers.put("Cache-Control", "no-cache");
+            
+            log.debug("Fetching document from URL: {} with user agent: {}", url, userAgent);
+            
             return Jsoup.connect(url)
                 .userAgent(userAgent)
-                .timeout(10000) // 10 seconds
+                .headers(headers)
+                .timeout(15000) // Extended timeout (15 seconds)
+                .followRedirects(true)
+                .maxBodySize(0) // Unlimited body size
                 .get();
         } catch (SocketTimeoutException e) {
             log.warn("Connection timed out for URL: {}", url);
@@ -71,6 +122,45 @@ public class JsoupScraperService implements ScraperService {
             log.warn("IO error for URL: {}", url, e);
             throw e;
         }
+    }
+    
+    /**
+     * Expand a shortened URL to its full form
+     */
+    private String expandShortenedUrl(String shortUrl) {
+        HttpURLConnection connection = null;
+        try {
+            URL url = new URI(shortUrl).toURL();
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setInstanceFollowRedirects(false);
+            connection.setRequestProperty("User-Agent", getRandomUserAgent());
+            connection.setRequestMethod("HEAD");
+            
+            int responseCode = connection.getResponseCode();
+            if (responseCode >= 300 && responseCode < 400) {
+                String expandedUrl = connection.getHeaderField("Location");
+                if (expandedUrl != null && !expandedUrl.isEmpty()) {
+                    log.debug("Expanded URL {} to {}", shortUrl, expandedUrl);
+                    // If still a relative URL, handle it
+                    if (expandedUrl.startsWith("/")) {
+                        expandedUrl = url.getProtocol() + "://" + url.getHost() + expandedUrl;
+                    }
+                    return expandedUrl;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to expand shortened URL {}: {}", shortUrl, e.getMessage());
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+        return shortUrl; // Return original if expansion fails
+    }
+    
+    private String getRandomUserAgent() {
+        // Use a random browser-like user agent instead of the bot identifier
+        return BROWSER_USER_AGENTS[random.nextInt(BROWSER_USER_AGENTS.length)];
     }
     
     private Optional<BigDecimal> extractPrice(Document doc) {
@@ -241,7 +331,7 @@ public class JsoupScraperService implements ScraperService {
                 // Extract domain from document baseUri to create absolute URL
                 String baseUrl = doc.baseUri();
                 try {
-                    java.net.URL url = new java.net.URL(baseUrl);
+                    URL url = new URI(baseUrl).toURL();
                     imageUrl = url.getProtocol() + "://" + url.getHost() + imageUrl;
                 } catch (Exception e) {
                     log.debug("Failed to parse base URL, using relative image URL");

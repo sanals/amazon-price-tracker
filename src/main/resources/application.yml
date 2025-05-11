@@ -53,10 +53,10 @@ logging:
 app:
   base-url: http://localhost:8090/api/v1
   scheduling:
-    checkRateMs: 30000  # 1 minute in milliseconds
+    checkRateMs: 60000  # 1 minute in milliseconds
   scraper:
-    default-delay-ms: 1000  # 1 second delay between requests
-    user-agent: "PriceTrackerBot/1.0 (+http://pricetracker.example.com/bot-info)"
+    default-delay-ms: 2000  # Increased to 2 seconds delay between requests
+    user-agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"  # More realistic user agent
   notification:
     cooldown-hours: 24  # Set a 24-hour cooldown between notifications for the same product/user
 
