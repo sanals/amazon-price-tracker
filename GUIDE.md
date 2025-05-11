@@ -460,53 +460,204 @@ For sites with complex or regularly changing structures like Amazon:
 
 5. **Storage optimization**: Implement logic to store price history with reduced frequency over time (e.g., daily averages for older data).
 
-### Handling Amazon Shortened URLs
+### Enhanced Amazon India Scraping Support
 
-If you're tracking products from Amazon with shortened URLs (like amzn.in or a.co), you may encounter HTTP 500 errors:
+### Handling Amazon India Shortened URLs
 
+Amazon India frequently uses shortened URLs (like `https://amzn.in/d/4BQSnoC`) which present unique challenges:
+
+1. These URLs require redirection expansion
+2. They often trigger CAPTCHA verification mechanisms
+3. The price structure on Amazon India sites can be different from other regions
+
+To address these challenges, we've implemented:
+
+1. **URL Expansion**: The application automatically expands shortened URLs before scraping
+   ```
+   # Example of URL expansion
+   https://amzn.in/d/4BQSnoC -> https://www.amazon.in/product/dp/PRODUCTID
+   ```
+
+2. **CAPTCHA Detection**: Enhanced detection of CAPTCHA verification pages to avoid incorrect parsing
+   ```
+   # Signs of CAPTCHA pages
+   - Title containing "Robot Check" or "Enter the characters"
+   - Images with src containing "captcha"
+   - Text like "Type the characters you see in this image"
+   ```
+
+3. **Specialized Price Selectors**: Multiple selectors focused on Amazon India's HTML structure
+   ```
+   # Primary Amazon India price selectors
+   .priceToPay .a-offscreen
+   .apexPriceToPay .a-offscreen
+   #corePrice_feature_div .a-price .a-offscreen
+   ```
+
+4. **Robust Price Parsing**: Handling various Indian Rupee formats (₹4,599.00, ₹4,599, ₹ 4599)
+   ```
+   # Using regex pattern: (?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d+)?)
+   ```
+
+### Testing Amazon India URLs
+
+For optimal testing with Amazon India sites:
+
+1. **Use the Specialized Testing Endpoint**:
+   ```
+   GET /api/v1/test/scrape-amazon-shortened?url=https://amzn.in/d/4BQSnoC
+   ```
+   This endpoint provides detailed diagnostic information about:
+   - URL expansion attempts
+   - CAPTCHA detection
+   - Available price elements
+   - Extraction results
+
+2. **Avoid Triggering CAPTCHA**:
+   - Don't make requests too frequently (increase the scheduler interval)
+   - Consider using different user agents for each request
+   - If you encounter persistent CAPTCHA problems, try using the full URL format
+   
+3. **Debugging Price Extraction**:
+   The enhanced response includes which selectors matched, helping you understand why a particular price was chosen.
+
+### Common Issues and Solutions
+
+1. **Getting CAPTCHA Pages**:
+   - **Problem**: `Detected CAPTCHA page with following signals: title=true, image=true, text=true`
+   - **Solution**: Reduce scraping frequency, use full URLs, rotate IP addresses, or use proxy services
+
+2. **Incorrect Prices (Too Low)**: 
+   - **Problem**: Scraper picking up related product prices (₹225.00) that are much lower than the main product
+   - **Solution**: Price validation with minimum thresholds and text length limits
+
+3. **Inconsistent Prices Between Scrapes**:
+   - **Problem**: Same URL gives different prices on different scrapes
+   - **Solution**: The improved scraper prioritizes price containers in a consistent order
+
+4. **Shortened URL Expansion Fails**:
+   - **Problem**: `Error: expandedUrl not available`
+   - **Solution**: Try the full URL format directly or check network connectivity
+
+For further troubleshooting, use the enhanced test endpoint to get a complete view of the scraping process.
+
+## Enhanced Scraper Architecture
+
+### Strategy Pattern Implementation
+
+The scraper system has been completely redesigned to use a proper Strategy Pattern, allowing for:
+
+1. Multiple website-specific scraper implementations 
+2. A common interface with standard methods
+3. Automatic detection of which scraper to use for a given URL
+4. Extension by adding new strategies without modifying existing code
+
+Key components of the new architecture:
+
+#### 1. ScraperStrategy Interface
+
+The base interface that all scraper strategies must implement:
+
+```java
+public interface ScraperStrategy {
+    boolean canHandle(String url);
+    Optional<BigDecimal> extractPrice(Document doc);
+    Optional<String> extractName(Document doc);
+    Optional<String> extractImageUrl(Document doc);
+    Optional<ProductDetails> scrapeProductDetails(Document doc);
+    boolean isCaptchaPage(Document doc);
+    String expandShortenedUrl(String shortenedUrl);
+}
 ```
-HTTP error 500 for URL: https://amzn.in/d/bA9iHdh
+
+#### 2. BaseScraperStrategy Abstract Class
+
+A common base implementation with shared utilities:
+
+```java
+public abstract class BaseScraperStrategy implements ScraperStrategy {
+    // Common utilities for price parsing, URL expansion, CAPTCHA detection
+    protected Optional<BigDecimal> parsePrice(String text);
+    protected Optional<BigDecimal> extractPriceWithSelectors(Document doc, String[] selectors);
+    protected boolean isLikelyMainPrice(String text);
+}
 ```
 
-This occurs because:
+#### 3. Website-Specific Strategies
 
-1. **URL Redirection Issues**: Shortened URLs need redirection handling
-2. **Anti-Scraping Measures**: Amazon detects and blocks automated requests
-3. **User-Agent Detection**: Amazon rejects requests that identify as bots
+Specialized implementations for different retail websites:
 
-The application has been enhanced to handle these issues by:
-
-1. **URL Expansion**: Automatically expanding shortened URLs before scraping
-2. **Browser-Like Headers**: Using realistic browser headers and rotating user agents
-3. **Random Delays**: Adding random delays between requests to appear more human-like
-
-Best practices for tracking Amazon products:
-
-1. **Use Full URLs**: When possible, use full Amazon product URLs instead of shortened ones
-   ```
-   ✅ https://www.amazon.in/Apple-iPhone-13-128GB-Midnight/dp/B09G9HD6PD
-   ❌ https://amzn.in/d/bA9iHdh
-   ```
-
-2. **Adjust Scraping Frequency**: Set the `app.scheduling.checkRateMs` to a reasonable value (at least 1 hour)
-   ```yaml
-   app:
-     scheduling:
-       checkRateMs: 3600000  # 1 hour in milliseconds
-   ```
-
-3. **Test URLs First**: Use the test endpoint before adding URLs to track
-   ```
-   GET /api/v1/test/scrape?url=https://www.amazon.in/Apple-iPhone-13-128GB-Midnight/dp/B09G9HD6PD
-   ```
-
-4. **Use Regional Domains**: Ensure you're using the correct regional domain (amazon.in for India, amazon.com for US)
-
-For Amazon India specifically, you can use the specialized test endpoint:
-```
-GET /api/v1/test/scrape-amazon-india?url=https://www.amazon.in/product
+```java
+@Component
+public class AmazonScraperStrategy extends BaseScraperStrategy {
+    // Amazon-specific selectors and parsing logic
+    // Special handling for Amazon India prices
+    // CAPTCHA detection for Amazon
+}
 ```
 
-If you're still experiencing issues, try using the local HTML file testing approach:
-1. Save the product page HTML locally
-2. Test it with: `GET /api/v1/test/scrape-amazon-india?useFile=true`
+#### 4. Scraper Service
+
+Manages all strategies and delegates scraping to the appropriate one:
+
+```java
+@Service
+public class JsoupScraperService implements ScraperService {
+    private final List<ScraperStrategy> scraperStrategies;
+    
+    // Register strategies via constructor injection
+    public JsoupScraperService(AmazonScraperStrategy amazonStrategy) {
+        registerStrategy(amazonStrategy);
+    }
+    
+    // Find the right strategy for a URL
+    public Optional<ScraperStrategy> findStrategyForUrl(String url) {
+        for (ScraperStrategy strategy : scraperStrategies) {
+            if (strategy.canHandle(url)) {
+                return Optional.of(strategy);
+            }
+        }
+        return Optional.empty();
+    }
+    
+    // Main scraping methods delegate to appropriate strategy
+    public Optional<BigDecimal> scrapePrice(String url) {
+        Document doc = fetchDocument(url);
+        Optional<ScraperStrategy> strategy = findStrategyForUrl(url);
+        
+        if (strategy.isPresent()) {
+            return strategy.get().extractPrice(doc);
+        }
+        
+        // Fall back to generic approach if no specific strategy
+        return extractGenericPrice(doc);
+    }
+}
+```
+
+### Benefits of the New Architecture
+
+1. **Extensibility**: Add new retailer support by simply creating a new strategy class
+2. **Maintainability**: Each retailer's logic is isolated in its own class
+3. **Testability**: Each strategy can be tested independently
+4. **Robustness**: Better handling of various edge cases and CAPTCHA detection
+
+### Amazon India Enhanced Support
+
+The AmazonScraperStrategy now includes specialized handling for Amazon India pages:
+
+1. **Detect India-specific pages** using domain (.in) and content checks
+2. **Special handling for Indian Rupee format** (₹1,449.00, ₹1,449, etc.)
+3. **Site-specific selectors** targeting the unique structure of Amazon India product pages
+4. **Power adapter price detection** with specialized selectors for the examples provided
+
+### Testing Endpoints
+
+Several test endpoints are available to evaluate the new architecture:
+
+- `/api/v1/test/test-power-adapter`: Test the power adapter URL specifically
+- `/api/v1/test/compare-scrapers`: Compare all registered scrapers for a given URL
+- `/api/v1/test/scrape`: General scraping test
+- `/api/v1/test/save-product`: Save a product to the database
+- `/api/v1/test/run-scheduler`: Manually trigger the scheduler
+- `/api/v1/test/latest-prices`: View recent price history

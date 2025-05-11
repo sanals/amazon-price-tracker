@@ -2,33 +2,36 @@ package com.pricetracker.app.scraping;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
 import org.jsoup.HttpStatusException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.SocketTimeoutException;
-import java.net.URI;
 import java.net.UnknownHostException;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Implementation of ScraperService using Jsoup library.
+ * Implementation of ScraperService using Jsoup library and strategy pattern for site-specific scraping.
  */
 @Service
 public class JsoupScraperService implements ScraperService {
     
     private static final Logger log = LoggerFactory.getLogger(JsoupScraperService.class);
     private static final Random random = new Random();
+    
+    // List of registered scraper strategies (thread-safe)
+    private final List<ScraperStrategy> scraperStrategies = new CopyOnWriteArrayList<>();
     
     // Common browser user agents for rotation
     private static final String[] BROWSER_USER_AGENTS = {
@@ -38,14 +41,71 @@ public class JsoupScraperService implements ScraperService {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0"
     };
     
-    @Value("${app.scraper.user-agent}")
-    private String configuredUserAgent;
+    @Value("${app.scraper.default-delay-ms:1000}")
+    private int defaultDelayMs;
+    
+    /**
+     * Constructor to initialize with required strategies.
+     */
+    @Autowired
+    public JsoupScraperService(AmazonScraperStrategy amazonScraperStrategy) {
+        registerStrategy(amazonScraperStrategy);
+        log.info("JsoupScraperService initialized with {} strategies", scraperStrategies.size());
+    }
+    
+    @Override
+    public void registerStrategy(ScraperStrategy strategy) {
+        scraperStrategies.add(strategy);
+        log.info("Registered scraper strategy: {}", strategy.getClass().getSimpleName());
+    }
+    
+    @Override
+    public List<ScraperStrategy> getStrategies() {
+        return new ArrayList<>(scraperStrategies);
+    }
+    
+    @Override
+    public Optional<ScraperStrategy> findStrategyForUrl(String url) {
+        if (url == null || url.isEmpty()) {
+            return Optional.empty();
+        }
+        
+        // First expand shortened URLs
+        String expandedUrl = expandShortenedUrl(url);
+        if (!expandedUrl.equals(url)) {
+            log.debug("URL expanded from {} to {}", url, expandedUrl);
+            url = expandedUrl;
+        }
+        
+        // Find first strategy that can handle this URL
+        for (ScraperStrategy strategy : scraperStrategies) {
+            if (strategy.canHandle(url)) {
+                log.debug("Found strategy {} for URL: {}", 
+                        strategy.getClass().getSimpleName(), url);
+                return Optional.of(strategy);
+            }
+        }
+        
+        log.debug("No specific strategy found for URL: {}", url);
+        return Optional.empty();
+    }
     
     @Override
     public Optional<BigDecimal> scrapePrice(String productUrl) {
         try {
             Document doc = fetchDocument(productUrl);
-            return extractPrice(doc);
+            
+            // Find appropriate strategy
+            Optional<ScraperStrategy> strategyOpt = findStrategyForUrl(productUrl);
+            if (strategyOpt.isPresent()) {
+                log.debug("Using {} for URL: {}", 
+                        strategyOpt.get().getClass().getSimpleName(), productUrl);
+                return strategyOpt.get().extractPrice(doc);
+            }
+            
+            // If no specific strategy, use generic price extraction
+            log.debug("No specific strategy found, using generic price extraction for URL: {}", productUrl);
+            return extractGenericPrice(doc);
         } catch (Exception e) {
             logScrapingError("price", productUrl, e);
             return Optional.empty();
@@ -56,10 +116,21 @@ public class JsoupScraperService implements ScraperService {
     public Optional<ProductDetails> scrapeProductDetails(String productUrl) {
         try {
             Document doc = fetchDocument(productUrl);
+            
+            // Find appropriate strategy
+            Optional<ScraperStrategy> strategyOpt = findStrategyForUrl(productUrl);
+            if (strategyOpt.isPresent()) {
+                log.debug("Using {} for URL: {}", 
+                        strategyOpt.get().getClass().getSimpleName(), productUrl);
+                return strategyOpt.get().scrapeProductDetails(doc);
+            }
+            
+            // If no specific strategy, build details from generic extraction
+            log.debug("No specific strategy found, using generic extraction for URL: {}", productUrl);
             return Optional.of(new ProductDetails(
-                extractName(doc),
-                extractImageUrl(doc),
-                extractPrice(doc)
+                extractGenericName(doc),
+                extractGenericImageUrl(doc),
+                extractGenericPrice(doc)
             ));
         } catch (Exception e) {
             logScrapingError("product details", productUrl, e);
@@ -67,17 +138,20 @@ public class JsoupScraperService implements ScraperService {
         }
     }
     
-    private Document fetchDocument(String url) throws IOException {
-        // Expand shortened URLs (like amzn.in) first
-        if (url.contains("amzn.in") || url.contains("a.co")) {
-            log.debug("Detected shortened Amazon URL: {}, expanding it", url);
-            url = expandShortenedUrl(url);
-            log.debug("Expanded URL: {}", url);
+    @Override
+    public Document fetchDocument(String url) throws IOException {
+        // First expand shortened URLs
+        String expandedUrl = expandShortenedUrl(url);
+        if (!expandedUrl.equals(url)) {
+            log.debug("URL expanded from {} to {}", url, expandedUrl);
+            url = expandedUrl;
         }
         
-        // Add random delay to avoid detection (between 1-3 seconds)
+        // Add random delay to avoid detection (between 1-3 seconds by default)
         try {
-            Thread.sleep(1000 + random.nextInt(2000));
+            int delay = defaultDelayMs + random.nextInt(defaultDelayMs);
+            log.debug("Adding delay of {}ms before request", delay);
+            Thread.sleep(delay);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -90,6 +164,7 @@ public class JsoupScraperService implements ScraperService {
             Map<String, String> headers = new HashMap<>();
             headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
             headers.put("Accept-Language", "en-US,en;q=0.5");
+            headers.put("Accept-Charset", "utf-8");
             headers.put("Referer", "https://www.google.com/");
             headers.put("DNT", "1");
             headers.put("Connection", "keep-alive");
@@ -102,13 +177,27 @@ public class JsoupScraperService implements ScraperService {
             
             log.debug("Fetching document from URL: {} with user agent: {}", url, userAgent);
             
-            return Jsoup.connect(url)
+            Document doc = Jsoup.connect(url)
                 .userAgent(userAgent)
                 .headers(headers)
                 .timeout(15000) // Extended timeout (15 seconds)
                 .followRedirects(true)
                 .maxBodySize(0) // Unlimited body size
+                .ignoreContentType(false)
+                .ignoreHttpErrors(false)
                 .get();
+            
+            // Check if this is a CAPTCHA page
+            for (ScraperStrategy strategy : scraperStrategies) {
+                if (strategy.canHandle(url) && strategy.isCaptchaPage(doc)) {
+                    log.warn("Detected CAPTCHA page for URL: {}", url);
+                    throw new ScrapingException("CAPTCHA verification required for URL: " + url);
+                }
+            }
+            
+            return doc;
+        } catch (ScrapingException e) {
+            throw e;
         } catch (SocketTimeoutException e) {
             log.warn("Connection timed out for URL: {}", url);
             throw e;
@@ -124,221 +213,165 @@ public class JsoupScraperService implements ScraperService {
         }
     }
     
-    /**
-     * Expand a shortened URL to its full form
-     */
-    private String expandShortenedUrl(String shortUrl) {
-        HttpURLConnection connection = null;
-        try {
-            URL url = new URI(shortUrl).toURL();
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setInstanceFollowRedirects(false);
-            connection.setRequestProperty("User-Agent", getRandomUserAgent());
-            connection.setRequestMethod("HEAD");
-            
-            int responseCode = connection.getResponseCode();
-            if (responseCode >= 300 && responseCode < 400) {
-                String expandedUrl = connection.getHeaderField("Location");
-                if (expandedUrl != null && !expandedUrl.isEmpty()) {
-                    log.debug("Expanded URL {} to {}", shortUrl, expandedUrl);
-                    // If still a relative URL, handle it
-                    if (expandedUrl.startsWith("/")) {
-                        expandedUrl = url.getProtocol() + "://" + url.getHost() + expandedUrl;
-                    }
+    @Override
+    public String expandShortenedUrl(String shortenedUrl) {
+        // Find a strategy that can handle this URL
+        for (ScraperStrategy strategy : scraperStrategies) {
+            if (strategy.canHandle(shortenedUrl)) {
+                String expandedUrl = strategy.expandShortenedUrl(shortenedUrl);
+                if (!expandedUrl.equals(shortenedUrl)) {
                     return expandedUrl;
                 }
             }
-        } catch (Exception e) {
-            log.warn("Failed to expand shortened URL {}: {}", shortUrl, e.getMessage());
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
         }
-        return shortUrl; // Return original if expansion fails
+        
+        // Fall back to default implementation in BaseScraperStrategy
+        try {
+            // Use our BaseScraperStrategy's implementation as a fallback
+            ScraperStrategy defaultStrategy = scraperStrategies.stream()
+                .filter(s -> s instanceof BaseScraperStrategy)
+                .findFirst()
+                .orElse(null);
+            
+            if (defaultStrategy != null) {
+                return defaultStrategy.expandShortenedUrl(shortenedUrl);
+            }
+        } catch (Exception e) {
+            log.warn("Error expanding URL {}: {}", shortenedUrl, e.getMessage());
+        }
+        
+        return shortenedUrl; // Return original if expansion fails
     }
     
     private String getRandomUserAgent() {
-        // Use a random browser-like user agent instead of the bot identifier
+        // Use a random browser-like user agent
         return BROWSER_USER_AGENTS[random.nextInt(BROWSER_USER_AGENTS.length)];
     }
     
-    private Optional<BigDecimal> extractPrice(Document doc) {
+    /**
+     * Generic price extraction for sites without a specific strategy
+     */
+    private Optional<BigDecimal> extractGenericPrice(Document doc) {
         try {
             // Try a variety of common price selectors used by popular e-commerce sites
-            Element priceElement = doc.selectFirst(
-                // General selectors
-                "#price, .price, [data-price], .product-price, .current-price, .price-current, " +
-                // Amazon selectors
-                "#priceblock_ourprice, #priceblock_dealprice, .a-price .a-offscreen, .a-price-whole, " +
-                // Walmart selectors 
-                ".price-characteristic, [data-automation-id='product-price'], " +
-                // Best Buy selectors
-                ".priceView-customer-price span, .pb-purchase-price, " +
-                // eBay selectors
-                ".x-price-primary, .display-price, " +
-                // New Egg selectors
-                ".price-current, " +
-                // Target selectors
-                ".style__PriceFontSize-sc-__sc-17a8wpr-0, [data-test='product-price']"
-            );
+            String selectors = "#price, .price, [data-price], .product-price, .current-price, .price-current, " +
+                "span.price, div.price, span[itemprop=price], [class*=price]:not(del):not(s), " +
+                ".regular-price, .offer-price, .sale-price, .our-price, .special-price";
             
-            if (priceElement == null) {
-                log.debug("No price element found using primary selectors, trying secondary approach");
-                // Try a different approach - find ALL elements containing currency symbols or patterns
-                for (Element element : doc.select("*:containsOwn($), *:containsOwn(€), *:containsOwn(£), " +
-                        "*:containsOwn(¥), *:containsOwn(₹), *:containsOwn(price), *:containsOwn(Price)")) {
-                    String text = element.text().trim();
-                    // Check if it has digits and common price patterns
-                    if (text.matches(".*\\d+.*") && 
-                        (text.contains("$") || text.contains("€") || text.contains("£") || 
-                         text.contains("¥") || text.contains("₹") || 
-                         text.toLowerCase().contains("price"))) {
-                        priceElement = element;
-                        break;
+            for (String selector : selectors.split(", ")) {
+                var elements = doc.select(selector);
+                if (!elements.isEmpty()) {
+                    String priceText = elements.first().text()
+                        .replaceAll("[^\\d.,]", "") // Remove non-numeric characters except . and ,
+                        .replace(",", "."); // Normalize decimal separator
+                    
+                    // Additional handling for multiple dots (e.g., 1.234.56)
+                    if (priceText.indexOf('.') != priceText.lastIndexOf('.')) {
+                        priceText = priceText.replaceAll("\\.(?=.*\\.)", "");
+                    }
+                    
+                    return Optional.of(new BigDecimal(priceText));
+                }
+            }
+            
+            // If no match found using selectors, try looking for currency symbols
+            for (var element : doc.select("*:containsOwn($), *:containsOwn(€), *:containsOwn(£), " +
+                    "*:containsOwn(¥), *:containsOwn(₹), *:containsOwn(price), *:containsOwn(Price)")) {
+                String text = element.text().trim();
+                // Check if it has digits and common price patterns
+                if (text.matches(".*\\d+.*") && 
+                    (text.contains("$") || text.contains("€") || text.contains("£") || 
+                     text.contains("¥") || text.contains("₹") || 
+                     text.toLowerCase().contains("price"))) {
+                    
+                    String priceText = text.replaceAll("[^\\d.,]", "")
+                                          .replace(",", ".");
+                    
+                    // Additional handling for multiple dots
+                    if (priceText.indexOf('.') != priceText.lastIndexOf('.')) {
+                        priceText = priceText.replaceAll("\\.(?=.*\\.)", "");
+                    }
+                    
+                    try {
+                        return Optional.of(new BigDecimal(priceText));
+                    } catch (NumberFormatException e) {
+                        // Continue to next element if parsing fails
                     }
                 }
             }
             
-            if (priceElement == null) {
-                log.debug("No price element found in document");
-                return Optional.empty();
-            }
-            
-            String priceText = priceElement.text()
-                .replaceAll("[^\\d.,]", "") // Remove non-numeric characters except . and ,
-                .replace(",", "."); // Normalize decimal separator
-            
-            // Additional handling for multiple dots (e.g., 1.234.56)
-            if (priceText.indexOf('.') != priceText.lastIndexOf('.')) {
-                priceText = priceText.replaceAll("\\.(?=.*\\.)", "");
-            }
-            
-            return Optional.of(new BigDecimal(priceText));
+            log.debug("No price element found in document");
+            return Optional.empty();
         } catch (Exception e) {
             log.debug("Failed to extract price from document: {}", e.getMessage());
             return Optional.empty();
         }
     }
     
-    private Optional<String> extractName(Document doc) {
+    /**
+     * Generic name extraction for sites without a specific strategy
+     */
+    private Optional<String> extractGenericName(Document doc) {
         try {
             // Try a variety of common name/title selectors used by popular e-commerce sites
-            Element nameElement = doc.selectFirst(
-                // Common selectors
-                "h1, #productTitle, .product-title, .product-name, .title, " +
-                // Amazon selectors
-                "#productTitle, #title, " +
-                // Walmart selectors
-                "[data-automation-id='product-title'], .prod-ProductTitle, " +
-                // Best Buy selectors
-                ".heading-5.v-fw-regular, .sku-title, " +
-                // eBay selectors
-                ".x-item-title, .x-item-title__mainTitle, " +
-                // NewEgg selectors
-                ".product-title, " +
-                // Target selectors
-                "[data-test='product-title']"
-            );
+            String selectors = "h1, #title, .product-title, .product-name, .title, " +
+                               "h1[itemprop=name], [itemprop=name], .page-title, .heading";
             
-            if (nameElement == null) {
-                // Try a different approach - often the first h1 on the page is the product title
-                nameElement = doc.selectFirst("h1");
-                if (nameElement == null) {
-                    log.debug("No name element found in document");
-                    return Optional.empty();
+            for (String selector : selectors.split(", ")) {
+                var elements = doc.select(selector);
+                if (!elements.isEmpty()) {
+                    return Optional.of(elements.first().text().trim());
                 }
             }
             
-            String name = nameElement.text().trim();
-            return Optional.of(name);
+            // Fallback to page title if no product name found
+            return Optional.of(doc.title().trim());
         } catch (Exception e) {
             log.debug("Failed to extract name from document: {}", e.getMessage());
             return Optional.empty();
         }
     }
     
-    private Optional<String> extractImageUrl(Document doc) {
+    /**
+     * Generic image URL extraction for sites without a specific strategy
+     */
+    private Optional<String> extractGenericImageUrl(Document doc) {
         try {
             // Try a variety of common image selectors used by popular e-commerce sites
-            Element imageElement = doc.selectFirst(
-                // Common selectors
-                "#main-image, .main-image, .product-image, .primary-image, " +
-                // Amazon selectors
-                "#landingImage, #imgBlkFront, .a-dynamic-image, " +
-                // Walmart selectors
-                "[data-automation-id='image'], .prod-hero-image-carousel, " +
-                // Best Buy selectors
-                ".product-image img, .primary-image, " +
-                // eBay selectors
-                ".img.imgWr2, #icImg, " +
-                // NewEgg selectors
-                ".product-view-img-original, " +
-                // Target selectors
-                "[data-test='product-image']"
-            );
+            String selectors = "#main-image, .main-image, .product-image, .primary-image, " +
+                               "[itemprop=image], img.product, .product-img, .hero-image, " +
+                               ".gallery-image, .featured-image";
             
-            if (imageElement == null) {
-                // Try different approach - look for large images
-                for (Element img : doc.select("img")) {
-                    if (img.hasAttr("src") && 
-                        !img.attr("src").isEmpty() && 
-                        (img.hasAttr("width") && Integer.parseInt(img.attr("width")) > 200 || 
-                         img.hasAttr("height") && Integer.parseInt(img.attr("height")) > 200)) {
-                        imageElement = img;
-                        break;
-                    }
-                }
-                
-                // If still not found, just get the first meaningful image
-                if (imageElement == null) {
-                    for (Element img : doc.select("img")) {
-                        if (img.hasAttr("src") && 
-                            !img.attr("src").isEmpty() && 
-                            !img.attr("src").endsWith(".gif") &&
-                            !img.attr("src").contains("icon") &&
-                            !img.attr("src").contains("logo")) {
-                            imageElement = img;
-                            break;
-                        }
-                    }
+            for (String selector : selectors.split(", ")) {
+                var elements = doc.select(selector);
+                if (!elements.isEmpty()) {
+                    return Optional.of(elements.first().attr("src"));
                 }
             }
             
-            if (imageElement == null) {
-                log.debug("No image element found in document");
-                return Optional.empty();
-            }
-            
-            // Try different image attributes, prioritize data-a-dynamic-image (JSON) in case of Amazon
-            String imageUrl;
-            if (imageElement.hasAttr("data-a-dynamic-image")) {
-                String jsonImages = imageElement.attr("data-a-dynamic-image");
-                imageUrl = jsonImages.substring(2, jsonImages.indexOf('"', 2)); // Extract first URL
-            } else if (imageElement.hasAttr("data-old-hires")) {
-                imageUrl = imageElement.attr("data-old-hires");
-            } else if (imageElement.hasAttr("srcset")) {
-                String srcset = imageElement.attr("srcset");
-                imageUrl = srcset.split("\\s+")[0]; // First URL in srcset
-            } else {
-                imageUrl = imageElement.attr("src");
-            }
-            
-            // Make sure we have an absolute URL
-            if (imageUrl.startsWith("//")) {
-                imageUrl = "https:" + imageUrl;
-            } else if (imageUrl.startsWith("/")) {
-                // Extract domain from document baseUri to create absolute URL
-                String baseUrl = doc.baseUri();
-                try {
-                    URL url = new URI(baseUrl).toURL();
-                    imageUrl = url.getProtocol() + "://" + url.getHost() + imageUrl;
-                } catch (Exception e) {
-                    log.debug("Failed to parse base URL, using relative image URL");
+            // Look for large images on the page
+            for (var img : doc.select("img")) {
+                if (img.hasAttr("src") && 
+                    !img.attr("src").isEmpty() && 
+                    (img.hasAttr("width") && Integer.parseInt(img.attr("width")) > 200 || 
+                     img.hasAttr("height") && Integer.parseInt(img.attr("height")) > 200)) {
+                    return Optional.of(img.attr("src"));
                 }
             }
             
-            return Optional.of(imageUrl);
+            // If still not found, just get the first meaningful image
+            for (var img : doc.select("img")) {
+                if (img.hasAttr("src") && 
+                    !img.attr("src").isEmpty() && 
+                    !img.attr("src").endsWith(".gif") &&
+                    !img.attr("src").contains("icon") &&
+                    !img.attr("src").contains("logo")) {
+                    return Optional.of(img.attr("src"));
+                }
+            }
+            
+            log.debug("No image element found in document");
+            return Optional.empty();
         } catch (Exception e) {
             log.debug("Failed to extract image URL from document: {}", e.getMessage());
             return Optional.empty();
@@ -353,6 +386,9 @@ public class JsoupScraperService implements ScraperService {
             log.warn("Timeout while scraping {} from URL: {}", type, url);
         } else if (e instanceof UnknownHostException) {
             log.warn("Unknown host while scraping {} from URL: {}", type, url);
+        } else if (e instanceof ScrapingException) {
+            log.warn("Scraping error while scraping {} from URL: {}: {}", 
+                type, url, e.getMessage());
         } else {
             log.warn("Error while scraping {} from URL: {}", type, url, e);
         }

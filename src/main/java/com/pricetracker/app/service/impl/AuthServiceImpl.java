@@ -13,6 +13,7 @@ import com.pricetracker.app.repository.PasswordResetTokenRepository;
 import com.pricetracker.app.repository.UserRepository;
 import com.pricetracker.app.security.JwtService;
 import com.pricetracker.app.service.AuthService;
+import com.pricetracker.app.service.EmailService;
 import com.pricetracker.app.service.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -41,6 +42,7 @@ public class AuthServiceImpl implements AuthService {
     private final RefreshTokenService refreshTokenService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
 
     @Value("${app.base-url}")
@@ -58,6 +60,8 @@ public class AuthServiceImpl implements AuthService {
         // Instead of casting, fetch the user from the repository
         User user = userRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found with username: " + request.getUsername()));
+
+        // User user = (User) authentication.getPrincipal();
         
         // Update last login time
         user.setLastLogin(LocalDateTime.now());
@@ -168,7 +172,7 @@ public class AuthServiceImpl implements AuthService {
         
         passwordResetTokenRepository.save(resetToken);
         
-        // Send email - for now just log it since email service is not yet implemented
+        // Send email
         String resetUrl = baseUrl + "/auth/reset-password?token=" + token;
         String subject = "Password Reset Request";
         String body = "Hello " + user.getUsername() + ",\n\n" +
@@ -177,8 +181,7 @@ public class AuthServiceImpl implements AuthService {
                 "This link will expire in 24 hours.\n\n" +
                 "If you did not request a password reset, please ignore this email.";
         
-        // Log instead of sending email (since emailService is not implemented yet)
-        logger.info("Would send password reset email to: {} with token: {}", user.getEmail(), token);
+        emailService.sendEmail(user.getEmail(), subject, body);
     }
 
     @Override

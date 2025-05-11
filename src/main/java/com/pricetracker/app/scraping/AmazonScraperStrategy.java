@@ -3,274 +3,121 @@ package com.pricetracker.app.scraping;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.util.Arrays;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Specialized scraper strategy for Amazon websites, with enhanced support for Amazon India.
+ * Scraper strategy for Amazon websites, with special handling for Amazon India.
  */
 @Component
-public class AmazonScraperStrategy implements ScraperStrategy {
+public class AmazonScraperStrategy extends BaseScraperStrategy {
     
-    private static final Logger log = LoggerFactory.getLogger(AmazonScraperStrategy.class);
+    // Max length for price text to avoid related products sections
+    private static final int MAX_PRICE_TEXT_LENGTH = 100;
     
-    // Regular expression to extract price from text (handles various formats like ₹4,599.00, ₹4,599, 4599, etc.)
-    // Enhanced to better handle Indian Rupee formats
-    private static final Pattern PRICE_PATTERN = Pattern.compile("(?:₹|Rs\\.?|INR)?\\s*([\\d,]+(?:\\.\\d+)?)");
+    // Regular expression to extract Indian price from text
+    private static final Pattern INDIAN_PRICE_PATTERN = Pattern.compile("(?:₹|Rs\\.?|INR)?\\s*([\\d,]+(?:\\.\\d+)?)");
     
     // List of CSS selectors for Amazon price elements (in order of priority)
-    // Enhanced with more India-specific selectors
-    private static final List<String> PRICE_SELECTORS = Arrays.asList(
-        // Amazon India specific selectors
-        "#corePriceDisplay_desktop_feature_div .a-price .a-offscreen",
-        "#corePriceDisplay_desktop_feature_div .a-price-whole",
-        ".indiaPriceInfoButton span.a-size-base",
-        ".currencyINR",
-        "span.a-price-whole",
-        "#priceblock_ourprice_row .a-span12 span.a-color-price",
-        "#priceblock_dealprice_row .a-span12 span.a-color-price",
-        "#apex_desktop_newAccordionRow span.a-price span.a-offscreen",
-        "#apex_desktop_newAccordionRow span.a-price .a-price-whole",
-        "#aod-price-1 span.a-offscreen",
-        "#buybox-container .a-price .a-offscreen",
+    private static final String[] PRICE_SELECTORS = {
+        // Main price display (most reliable)
+        ".a-price .a-offscreen", 
+        ".a-section.a-spacing-none.aok-align-center .a-price .a-offscreen",
         
-        // Prime Day Deal or Deal price selectors
-        ".priceToPay .a-offscreen",
-        ".apexPriceToPay .a-offscreen",
-        
-        // Regular price selectors
+        // Amazon India specific price selectors
+        ".a-price-whole", 
         "#priceblock_ourprice",
-        "#priceblock_dealprice",
-        ".a-price .a-offscreen",
-        ".a-size-large.a-color-price",
-        "#price_inside_buybox",
-        "#newBuyBoxPrice",
-        "#tp_price_block_total_price_ww",
+        "#priceblock_dealprice", 
+        ".apexPriceToPay .a-offscreen",
+        ".priceToPay .a-offscreen", 
+        ".priceToPay span[data-a-size='xl']",
         
-        // Deal price selectors
-        "#priceblock_saleprice",
-        "#snsPrice .a-color-price",
+        // Deal prices
+        "#dealprice_savings .a-offscreen",
         
-        // Mobile selectors
-        "#corePrice_feature_div .a-offscreen",
+        // Power adapter specific selectors based on the provided example
+        "span.a-price span.a-offscreen", 
         "#corePrice_desktop .a-offscreen",
         
-        // Kindle book price
-        "#kindle-price",
-        
-        // Legacy selectors
+        // Fallbacks for various layouts
         ".a-color-price",
-        ".offer-price",
-        ".sale-price",
-        
-        // Generic selectors
-        ".a-price-whole",  // Often used for Indian Rupee integer part
-        "#price",
-        ".price",
-        "#priceblock_ourprice_row span",
-        "#dealprice_shippingmessage span",
-        "[data-a-color='price'] span.a-offscreen"
-    );
+        ".a-text-price .a-offscreen",
+        ".a-lineitem .a-color-price",
+        "#usedBuySection .a-color-price"
+    };
     
-    // List of CSS selectors for Amazon product name elements
-    private static final List<String> NAME_SELECTORS = Arrays.asList(
-        // Amazon India specific selectors
-        "h1#title span#productTitle",
-        "h1.product-title-word-break",
+    // List of CSS selectors for Amazon product title elements
+    private static final String[] NAME_SELECTORS = {
         "#productTitle",
         "#title",
         ".product-title-word-break",
-        ".a-size-large.product-title-word-break",
-        "[data-feature-name='title']",
-        "#item_name",
-        "#ebooksProductTitle"
-    );
+        ".product-title",
+        "h1.a-size-large",
+        "[data-feature-name='title']"
+    };
     
     // List of CSS selectors for Amazon product image elements
-    private static final List<String> IMAGE_SELECTORS = Arrays.asList(
-        // Amazon India specific selectors
+    private static final String[] IMAGE_SELECTORS = {
         "#landingImage",
         "#imgBlkFront",
-        "#ebooksImgBlkFront",
+        ".a-dynamic-image",
         "#main-image",
         "#imgTagWrapperId img",
-        ".a-dynamic-image",
-        "#dealCardDynImage",
-        ".image",
-        // Product detail carousel images
-        "#altImages .imageThumbnail img",
-        ".imageSwatches img"
-    );
+        ".imgTagWrapper img"
+    };
     
     @Override
     public boolean canHandle(String url) {
-        if (url == null) {
-            return false;
-        }
-        
-        return url.contains("amazon.in") ||
-               url.contains("amazon.com") ||
-               url.contains("amzn.in") || 
-               url.contains("amzn.to") ||
-               url.contains("a.co");
+        return url != null && (
+            url.contains("amazon.") || 
+            url.contains("amzn.") || 
+            url.contains("a.co")
+        );
     }
     
     @Override
     public Optional<BigDecimal> extractPrice(Document doc) {
-        log.debug("Extracting price using Amazon-specific strategy");
+        if (isCaptchaPage(doc)) {
+            log.warn("Detected CAPTCHA verification page during price extraction - aborting");
+            return Optional.empty();
+        }
         
-        // First try India-specific approach for Amazon.in
-        if (doc.baseUri().contains("amazon.in")) {
-            log.debug("Detected Amazon India site, trying India-specific extraction");
+        // 1. Try Amazon India price extraction first for Indian sites
+        if (isAmazonIndia(doc)) {
             Optional<BigDecimal> indiaPrice = extractIndianPrice(doc);
             if (indiaPrice.isPresent()) {
                 return indiaPrice;
             }
         }
         
-        // Try each selector in order
-        for (String selector : PRICE_SELECTORS) {
-            Optional<BigDecimal> price = extractPriceWithSelector(doc, selector);
-            if (price.isPresent()) {
-                return price;
-            }
+        // 2. Try with our specific selectors
+        Optional<BigDecimal> price = extractPriceWithSelectors(doc, PRICE_SELECTORS);
+        if (price.isPresent()) {
+            return price;
         }
         
-        // Try to find any element that might contain a price by looking for currency symbols or price-like text
-        return findPriceInPage(doc);
-    }
-    
-    /**
-     * Special extraction logic for Amazon India prices
-     */
-    private Optional<BigDecimal> extractIndianPrice(Document doc) {
-        // Try specific price areas on Amazon India
-        Elements priceElements = doc.select(
-            ".indiaPriceInfoButton, " +
-            "#corePriceDisplay_desktop_feature_div, " +
-            "#corePrice_feature_div, " +
-            "#apex_desktop, " +
-            ".a-box-group .a-section span.a-color-price"
-        );
-        
-        for (Element element : priceElements) {
-            // Look for price text with Rupee symbol in or near this element
-            Elements rupeeElements = element.select("*:contains(₹)");
-            for (Element rupeeElement : rupeeElements) {
-                String text = rupeeElement.text().trim();
-                Optional<BigDecimal> price = parsePrice(text);
-                if (price.isPresent()) {
-                    log.debug("Found Amazon India price: {} from text '{}'", price.get(), text);
-                    return price;
-                }
-            }
-        }
-        
-        return Optional.empty();
-    }
-    
-    private Optional<BigDecimal> extractPriceWithSelector(Document doc, String selector) {
-        try {
-            Element element = doc.selectFirst(selector);
-            if (element != null) {
-                String priceText = element.text().trim();
-                log.debug("Found potential price element with selector {}: '{}'", selector, priceText);
-                return parsePrice(priceText);
-            }
-        } catch (Exception e) {
-            log.debug("Error extracting price with selector {}: {}", selector, e.getMessage());
-        }
-        return Optional.empty();
-    }
-    
-    private Optional<BigDecimal> findPriceInPage(Document doc) {
-        // Look for elements containing price-related text, with enhanced India-specific patterns
-        Elements priceElements = doc.select(
-            "*:contains(₹), " + 
-            "*:contains(Rs), " + 
-            "*:contains(INR), " + 
-            "*:contains(Price:), " + 
-            "*:contains(MRP), " + 
-            "*:contains(price), " + 
-            "*:contains(Deal of the Day), " + 
-            "*:contains(Limited time deal)"
-        );
-        
-        for (Element element : priceElements) {
-            if (!element.hasText() || element.children().size() > 5) {
-                continue; // Skip elements without text or with too many children (likely not price elements)
-            }
+        // 3. Try a different approach for Amazon - search for all elements with a price class
+        for (Element element : doc.select("[class*=price], [class*=Price], [id*=price], [id*=Price]")) {
+            String priceText = element.text().trim();
             
-            String text = element.text().trim();
-            
-            // Skip long texts
-            if (text.length() > 50) {
+            // Skip texts that are likely not main product prices
+            if (priceText.length() > MAX_PRICE_TEXT_LENGTH || priceText.isEmpty()) {
                 continue;
             }
             
-            Optional<BigDecimal> price = parsePrice(text);
-            if (price.isPresent()) {
-                log.debug("Found price {} in text: '{}'", price.get(), text);
-                return price;
-            }
-        }
-        
-        return Optional.empty();
-    }
-    
-    /**
-     * Parse a price from text, handling various formats with enhanced support for Indian formats.
-     */
-    private Optional<BigDecimal> parsePrice(String text) {
-        if (text == null || text.isEmpty()) {
-            return Optional.empty();
-        }
-        
-        // Special case for Indian Rupee formatting, which can vary:
-        // ₹4,599.00 or ₹ 4,599.00 or ₹4,599 or ₹ 4,599 or Rs. 4,599 or Rs 4599
-        try {
-            Matcher matcher = PRICE_PATTERN.matcher(text);
-            if (matcher.find()) {
-                String priceStr = matcher.group(1).replace(",", ""); // Remove commas
-                return Optional.of(new BigDecimal(priceStr));
-            }
+            log.debug("Found potential price element from generic selectors: '{}'", priceText);
             
-            // Additional check for price split into whole/fraction parts (common in India)
-            // Example: "₹4,599 00" (where 00 is the fraction part, without a decimal point)
-            if (text.contains("₹") && text.matches(".*\\d+.*")) {
-                // Extract all numbers
-                String[] parts = text.split("[^\\d]");
-                StringBuilder priceBuilder = new StringBuilder();
-                boolean foundMain = false;
-                
-                for (String part : parts) {
-                    if (!part.isEmpty()) {
-                        if (!foundMain && part.length() > 1) {
-                            // This is likely the main price
-                            priceBuilder.append(part);
-                            foundMain = true;
-                        } else if (foundMain && part.length() <= 2) {
-                            // This is likely the fraction part
-                            priceBuilder.append(".").append(part);
-                            break;
-                        }
-                    }
-                }
-                
-                if (foundMain && priceBuilder.length() > 0) {
-                    return Optional.of(new BigDecimal(priceBuilder.toString()));
-                }
+            // Use the COMMON_PRICE_PATTERN from parent class via helper method
+            Optional<BigDecimal> extractedPrice = tryParsePrice(priceText);
+            if (extractedPrice.isPresent()) {
+                return extractedPrice;
             }
-        } catch (Exception e) {
-            log.debug("Failed to parse price from text: '{}'", text);
         }
         
         return Optional.empty();
@@ -278,24 +125,24 @@ public class AmazonScraperStrategy implements ScraperStrategy {
     
     @Override
     public Optional<String> extractName(Document doc) {
-        log.debug("Extracting name using Amazon-specific strategy");
+        if (isCaptchaPage(doc)) {
+            log.warn("Detected CAPTCHA verification page during name extraction - aborting");
+            return Optional.empty();
+        }
         
-        // Try each selector in order
         for (String selector : NAME_SELECTORS) {
-            try {
-                Element element = doc.selectFirst(selector);
-                if (element != null) {
-                    String name = element.text().trim();
+            Element element = doc.selectFirst(selector);
+            if (element != null) {
+                String name = element.text().trim();
+                if (!name.isEmpty()) {
                     return Optional.of(name);
                 }
-            } catch (Exception e) {
-                log.debug("Error extracting name with selector {}: {}", selector, e.getMessage());
             }
         }
         
-        // Fallback to any h1 element
+        // Fallback to first h1 if no specific selector worked
         Element h1 = doc.selectFirst("h1");
-        if (h1 != null) {
+        if (h1 != null && !h1.text().isEmpty()) {
             return Optional.of(h1.text().trim());
         }
         
@@ -304,42 +151,227 @@ public class AmazonScraperStrategy implements ScraperStrategy {
     
     @Override
     public Optional<String> extractImageUrl(Document doc) {
-        log.debug("Extracting image URL using Amazon-specific strategy");
+        if (isCaptchaPage(doc)) {
+            log.warn("Detected CAPTCHA verification page during image extraction - aborting");
+            return Optional.empty();
+        }
         
-        // Try each selector in order
         for (String selector : IMAGE_SELECTORS) {
-            try {
-                Element element = doc.selectFirst(selector);
-                if (element != null) {
-                    // Handle dynamic image JSON data (common on Amazon)
-                    if (element.hasAttr("data-a-dynamic-image")) {
-                        String jsonImages = element.attr("data-a-dynamic-image");
-                        if (jsonImages.startsWith("{\"")) {
-                            String imageUrl = jsonImages.substring(2, jsonImages.indexOf('"', 2));
-                            return Optional.of(imageUrl);
+            Element element = doc.selectFirst(selector);
+            if (element != null) {
+                // Try different image attributes in order of preference
+                if (element.hasAttr("data-old-hires")) {
+                    return Optional.of(element.attr("data-old-hires"));
+                } else if (element.hasAttr("data-a-dynamic-image")) {
+                    String jsonImages = element.attr("data-a-dynamic-image");
+                    // Extract the first URL from the JSON string (format: {"url1":[], "url2":[],...})
+                    if (jsonImages.startsWith("{\"")) {
+                        int firstQuote = jsonImages.indexOf('"');
+                        int secondQuote = jsonImages.indexOf('"', firstQuote + 1);
+                        if (firstQuote >= 0 && secondQuote > firstQuote) {
+                            return Optional.of(jsonImages.substring(firstQuote + 1, secondQuote));
                         }
                     }
-                    
-                    // Try data-old-hires attribute (high resolution)
-                    if (element.hasAttr("data-old-hires")) {
-                        return Optional.of(element.attr("data-old-hires"));
-                    }
-                    
-                    // Try data-src attribute
-                    if (element.hasAttr("data-src")) {
-                        return Optional.of(element.attr("data-src"));
-                    }
-                    
-                    // Default src attribute
-                    if (element.hasAttr("src")) {
-                        return Optional.of(element.attr("src"));
-                    }
+                } else if (element.hasAttr("src")) {
+                    return Optional.of(element.attr("src"));
                 }
-            } catch (Exception e) {
-                log.debug("Error extracting image URL with selector {}: {}", selector, e.getMessage());
+            }
+        }
+        
+        // Fallback approach - find any large image in the document
+        Elements imgs = doc.select("img[width][height]");
+        for (Element img : imgs) {
+            try {
+                int width = Integer.parseInt(img.attr("width"));
+                int height = Integer.parseInt(img.attr("height"));
+                if (width > 300 && height > 300 && img.hasAttr("src")) {
+                    return Optional.of(img.attr("src"));
+                }
+            } catch (NumberFormatException ignored) {
+                // Continue to next image if attributes aren't valid integers
             }
         }
         
         return Optional.empty();
+    }
+    
+    /**
+     * Helper method that uses the common price pattern but doesn't override parent method
+     */
+    private Optional<BigDecimal> tryParsePrice(String text) {
+        if (text == null || text.isEmpty()) {
+            return Optional.empty();
+        }
+        
+        // Skip excessively long text
+        if (text.length() > MAX_PRICE_TEXT_LENGTH) {
+            log.debug("Skipping oversized price text (length {})", text.length());
+            return Optional.empty();
+        }
+        
+        try {
+            // First try direct digit extraction - simplest and most reliable
+            Matcher digitMatcher = Pattern.compile("(\\d{1,3}(,\\d{3})*(\\.\\d+)?)").matcher(text);
+            if (digitMatcher.find()) {
+                String priceStr = digitMatcher.group(1).replace(",", "");
+                log.debug("Directly extracted price digits from text: '{}'", priceStr);
+                return Optional.of(new BigDecimal(priceStr));
+            }
+            
+            // If direct extraction fails, try cleaning
+            String cleanedText = text;
+            
+            // Special handling for corrupted Rupee symbol
+            if (text.contains("Γé╣") || text.contains("Γ") || text.contains("é╣")) {
+                cleanedText = text.replace("Γé╣", "Rs.")
+                               .replaceAll("[^\\x00-\\x7F]", ""); // Remove all non-ASCII chars
+                log.debug("Aggressive clean of corrupted text: '{}'", cleanedText);
+            }
+            
+            // Try the Indian format on cleaned text
+            if (cleanedText.contains("₹") || cleanedText.contains("Rs.") || cleanedText.contains("INR")) {
+                Matcher matcher = INDIAN_PRICE_PATTERN.matcher(cleanedText);
+                if (matcher.find()) {
+                    String priceStr = matcher.group(1).replace(",", ""); // Remove commas
+                    return Optional.of(new BigDecimal(priceStr));
+                }
+            }
+            
+            // Last resort - just find any sequence of digits with optional commas and decimal point
+            Matcher lastResortMatcher = Pattern.compile("(\\d+(?:,\\d+)*(?:\\.\\d+)?)").matcher(cleanedText);
+            if (lastResortMatcher.find()) {
+                String priceStr = lastResortMatcher.group(1).replace(",", "");
+                log.debug("Last resort price extraction: '{}'", priceStr);
+                return Optional.of(new BigDecimal(priceStr));
+            }
+        } catch (Exception e) {
+            log.debug("Failed to parse price from text: '{}' - Error: {}", text, e.getMessage());
+        }
+        
+        return Optional.empty();
+    }
+    
+    /**
+     * Special extraction logic for Amazon India prices
+     */
+    private Optional<BigDecimal> extractIndianPrice(Document doc) {
+        log.debug("Extracting Amazon India price with enhanced strategy");
+        
+        // First check the power adapter specific selectors from the example
+        Element dealPrice = doc.selectFirst(".a-section.a-spacing-none.aok-align-center .a-price .a-offscreen");
+        if (dealPrice != null) {
+            String dealPriceText = dealPrice.text().trim();
+            log.debug("Found USB-C Power Adapter price: '{}'", dealPriceText);
+            
+            Optional<BigDecimal> price = tryParsePrice(dealPriceText);
+            if (price.isPresent()) {
+                return price;
+            }
+        }
+        
+        // Try specific BuyBox price location (where Add to Cart button is)
+        Element buyBoxPrice = doc.selectFirst("#corePrice_desktop .a-offscreen, .priceToPay .a-offscreen");
+        if (buyBoxPrice != null) {
+            String buyBoxPriceText = buyBoxPrice.text().trim();
+            log.debug("Found BuyBox price: '{}'", buyBoxPriceText);
+            
+            Optional<BigDecimal> price = tryParsePrice(buyBoxPriceText);
+            if (price.isPresent()) {
+                return price;
+            }
+        }
+        
+        // Try other price selectors with specific Indian rupee format check
+        for (String selector : PRICE_SELECTORS) {
+            Element element = doc.selectFirst(selector);
+            if (element != null) {
+                String priceText = element.text().trim();
+                
+                // Skip if text is too long (likely not a clean price)
+                if (priceText.length() > MAX_PRICE_TEXT_LENGTH) {
+                    continue;
+                }
+                
+                // Look specifically for Indian rupee symbol, corrupted rupee symbol, or pattern
+                if (priceText.contains("₹") || priceText.contains("Rs.") || 
+                    priceText.contains("Γé╣") || // Check for corrupted Rupee symbol
+                    priceText.matches(".*\\d+,\\d{3}.*")) {
+                    log.debug("Found potential Indian price: '{}'", priceText);
+                    
+                    Optional<BigDecimal> price = tryParsePrice(priceText);
+                    if (price.isPresent()) {
+                        return price;
+                    }
+                }
+            }
+        }
+        
+        // Last resort - try to find any text with the corrupted Rupee symbol pattern
+        Elements potentialPriceElements = doc.select("*:containsOwn(Γé╣)");
+        for (Element element : potentialPriceElements) {
+            String priceText = element.text().trim();
+            if (priceText.length() <= MAX_PRICE_TEXT_LENGTH) {
+                log.debug("Found text with corrupted Rupee symbol: '{}'", priceText);
+                Optional<BigDecimal> price = tryParsePrice(priceText);
+                if (price.isPresent()) {
+                    return price;
+                }
+            }
+        }
+        
+        return Optional.empty();
+    }
+    
+    /**
+     * Check if the document is from Amazon India
+     */
+    private boolean isAmazonIndia(Document doc) {
+        String url = doc.baseUri();
+        return url != null && (url.contains("amazon.in") || url.contains(".in/"));
+    }
+    
+    @Override
+    public boolean isCaptchaPage(Document doc) {
+        // Check for common CAPTCHA page elements
+        boolean hasCaptchaTitle = !doc.select("title:contains(Robot Check), title:contains(CAPTCHA), title:contains(Enter the characters)").isEmpty();
+        boolean hasCaptchaImage = !doc.select("img[src*=captcha], form[action*=validateCaptcha]").isEmpty();
+        boolean hasCaptchaText = !doc.select("h4:contains(Enter the characters), p:contains(not a robot), h4:contains(Type the characters)").isEmpty();
+        boolean hasVerificationForm = !doc.select("form[action*=verify]").isEmpty();
+        
+        boolean result = hasCaptchaTitle || hasCaptchaImage || hasCaptchaText || hasVerificationForm;
+        
+        if (result) {
+            log.warn("Detected CAPTCHA page with the following signals: title={}, image={}, text={}, form={}", 
+                    hasCaptchaTitle, hasCaptchaImage, hasCaptchaText, hasVerificationForm);
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Helper method to extract all price texts from a document for debugging purposes.
+     */
+    public Map<String, String> extractAllPriceTexts(Document doc) {
+        Map<String, String> priceTexts = new HashMap<>();
+        
+        if (isCaptchaPage(doc)) {
+            priceTexts.put("error", "CAPTCHA page detected");
+            return priceTexts;
+        }
+        
+        // Try all our selectors and collect values
+        for (String selector : PRICE_SELECTORS) {
+            Elements elements = doc.select(selector);
+            if (!elements.isEmpty()) {
+                for (Element element : elements) {
+                    String text = element.text().trim();
+                    if (!text.isEmpty() && text.length() < MAX_PRICE_TEXT_LENGTH) {
+                        priceTexts.put(selector, text);
+                    }
+                }
+            }
+        }
+        
+        return priceTexts;
     }
 } 
