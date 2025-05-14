@@ -19,7 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -39,26 +41,79 @@ public class PriceCheckScheduler {
     @Value("${app.notification.cooldown-hours:24}")
     private long notificationCooldownHours;
     
-    @Scheduled(fixedRateString = "${app.scheduling.checkRateMs:30000}")
+    // Map to store the last check time for each product
+    private final Map<Long, Instant> lastCheckTimeMap = new HashMap<>();
+    
+    @Scheduled(fixedRateString = "${app.scheduling.checkRateMs:60000}")
     @Transactional
     public void checkPrices() {
-        log.info("Starting scheduled price check");
+        log.info("Starting scheduled price check at {}", Instant.now());
+        
+        // Get all products with their tracked products data
         List<Product> products = productRepository.findAll();
+        log.info("Found {} products to evaluate for checking", products.size());
+        
+        Instant now = Instant.now();
+        int checkedCount = 0;
+        int skippedCount = 0;
         
         for (Product product : products) {
             try {
-                checkProductPrice(product);
-                Thread.sleep(defaultDelayMs); // Add delay between requests
+                // Get all tracked instances of this product
+                List<TrackedProduct> trackedProducts = trackedProductRepository.findByProductId(product.getId());
+                
+                if (trackedProducts.isEmpty()) {
+                    log.debug("Product {} is not tracked by any user, skipping", product.getId());
+                    skippedCount++;
+                    continue;
+                }
+                
+                // Find the minimum check interval among all users tracking this product
+                int minCheckIntervalMinutes = getMinCheckInterval(trackedProducts);
+                
+                // Check if enough time has passed since the last check
+                Instant lastCheckTime = lastCheckTimeMap.getOrDefault(product.getId(), Instant.EPOCH);
+                long minutesSinceLastCheck = Duration.between(lastCheckTime, now).toMinutes();
+                
+                log.info("Product {} ({}): min interval {}min, last checked {}min ago", 
+                    product.getId(), product.getName(), minCheckIntervalMinutes, minutesSinceLastCheck);
+                
+                if (minutesSinceLastCheck >= minCheckIntervalMinutes) {
+                    // Time to check this product
+                    log.info("Checking price for product {} after {}min (interval: {}min)", 
+                        product.getId(), minutesSinceLastCheck, minCheckIntervalMinutes);
+                    
+                    checkProductPrice(product);
+                    lastCheckTimeMap.put(product.getId(), now);
+                    checkedCount++;
+                    Thread.sleep(defaultDelayMs); // Add delay between requests
+                } else {
+                    log.info("Skipping check for product {} ({}min since last check, interval: {}min)", 
+                        product.getId(), minutesSinceLastCheck, minCheckIntervalMinutes);
+                    skippedCount++;
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 log.error("Price check interrupted", e);
                 break;
             } catch (Exception e) {
-                log.error("Error checking price for product {}: {}", product.getId(), e.getMessage());
+                log.error("Error checking price for product {}: {}", product.getId(), e.getMessage(), e);
+                skippedCount++;
             }
         }
         
-        log.info("Completed scheduled price check");
+        log.info("Completed scheduled price check: {} checked, {} skipped", checkedCount, skippedCount);
+    }
+    
+    private int getMinCheckInterval(List<TrackedProduct> trackedProducts) {
+        // Get the minimum interval from all tracked products for this product
+        int minInterval = trackedProducts.stream()
+            .mapToInt(TrackedProduct::getCheckIntervalMinutes)
+            .min()
+            .orElse(60); // Default to 60 minutes if no interval is set
+        
+        // Enforce a minimum check interval of 5 minutes to prevent excessive checking
+        return Math.max(minInterval, 5);
     }
     
     private void checkProductPrice(Product product) {

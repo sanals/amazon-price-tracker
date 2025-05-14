@@ -69,7 +69,8 @@ public class ProductTrackingControllerTest {
         Long userId = 1L;
         TrackProductRequest request = new TrackProductRequest(
                 "https://www.amazon.com/dp/B08F5F1TN4", 
-                new BigDecimal("449.99")
+                new BigDecimal("449.99"),
+                60 // Default 1 hour check interval
         );
         
         Product product = createTestProduct();
@@ -103,7 +104,8 @@ public class ProductTrackingControllerTest {
         Long userId = 1L;
         TrackProductRequest request = new TrackProductRequest(
                 "https://www.amazon.com/dp/B08F5F1TN4", 
-                new BigDecimal("449.99")
+                new BigDecimal("449.99"),
+                60 // Default 1 hour check interval
         );
         
         when(productTrackingService.addProductTracking(eq(userId), any(TrackProductRequest.class)))
@@ -208,7 +210,8 @@ public class ProductTrackingControllerTest {
         Long trackedProductId = 1L;
         UpdateTrackedProductRequest request = new UpdateTrackedProductRequest(
                 new BigDecimal("429.99"),
-                true
+                true,
+                60 // Default 1 hour check interval
         );
         
         Product product = createTestProduct();
@@ -241,7 +244,8 @@ public class ProductTrackingControllerTest {
         Long trackedProductId = 999L;
         UpdateTrackedProductRequest request = new UpdateTrackedProductRequest(
                 new BigDecimal("429.99"),
-                true
+                true,
+                60 // Default 1 hour check interval
         );
         
         when(productTrackingService.updateTrackedProduct(eq(userId), eq(trackedProductId), any(UpdateTrackedProductRequest.class)))

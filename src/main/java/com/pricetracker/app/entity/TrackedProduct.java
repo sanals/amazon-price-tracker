@@ -38,6 +38,13 @@ public class TrackedProduct {
     @Column
     private Instant lastNotifiedAt;
     
+    /**
+     * The interval in minutes at which to check this product's price.
+     * Minimum value enforced by the system is 5 minutes.
+     */
+    @Column(nullable = false)
+    private Integer checkIntervalMinutes = 60; // Default: 1 hour in minutes
+    
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
     

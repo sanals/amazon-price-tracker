@@ -10,5 +10,8 @@ public record UpdateTrackedProductRequest(
     @DecimalMin(value = "0.01", message = "Desired price must be greater than zero")
     BigDecimal desiredPrice,
     
-    Boolean notificationEnabled
+    Boolean notificationEnabled,
+    
+    @DecimalMin(value = "5", message = "Check interval must be at least 5 minutes")
+    Integer checkIntervalMinutes
 ) {} 

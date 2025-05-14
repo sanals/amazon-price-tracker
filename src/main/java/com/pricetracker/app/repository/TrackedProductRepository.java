@@ -51,4 +51,12 @@ public interface TrackedProductRepository extends JpaRepository<TrackedProduct, 
     List<TrackedProduct> findByProductIdAndNotificationEnabledTrue(Long productId);
 
     Optional<TrackedProduct> findByIdAndUserId(Long id, Long userId);
+    
+    /**
+     * Find all tracked products for a specific product.
+     * 
+     * @param productId the ID of the product
+     * @return a list of tracked products
+     */
+    List<TrackedProduct> findByProductId(Long productId);
 } 

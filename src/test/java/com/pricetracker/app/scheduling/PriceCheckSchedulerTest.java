@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,6 +64,9 @@ class PriceCheckSchedulerTest {
         ReflectionTestUtils.setField(priceCheckScheduler, "defaultDelayMs", 0L);
         ReflectionTestUtils.setField(priceCheckScheduler, "notificationCooldownHours", 24L);
         
+        // Initialize the lastCheckTimeMap with an empty HashMap to avoid NPE
+        ReflectionTestUtils.setField(priceCheckScheduler, "lastCheckTimeMap", new HashMap<>());
+        
         // Set up test products and tracked products
         testProduct1 = new Product();
         testProduct1.setId(1L);
@@ -84,6 +88,7 @@ class PriceCheckSchedulerTest {
         trackedProduct.setDesiredPrice(new BigDecimal("95.00"));
         trackedProduct.setNotificationEnabled(true);
         trackedProduct.setLastNotifiedAt(null);
+        trackedProduct.setCheckIntervalMinutes(5); // Set check interval to 5 minutes
     }
     
     @Test
@@ -143,12 +148,11 @@ class PriceCheckSchedulerTest {
         assertThat(newPrice.compareTo(oldPrice)).isLessThan(0); // This is a price drop
         assertThat(newPrice.compareTo(trackedProduct.getDesiredPrice())).isLessThan(0); // New price is below desired price
         
-        // Set up mocks
+        // Set up mocks for the updated scheduler
         when(productRepository.findAll()).thenReturn(Collections.singletonList(testProduct1));
+        when(trackedProductRepository.findByProductId(testProduct1.getId()))
+                .thenReturn(Collections.singletonList(trackedProduct));
         when(scraperService.scrapePrice(testProduct1.getProductUrl())).thenReturn(Optional.of(newPrice));
-        
-        // Now that we're testing the sendNotification method directly, we don't need to verify it's called
-        // in this test. We just need to verify the product is updated.
         
         // WHEN
         priceCheckScheduler.checkPrices();
@@ -167,6 +171,18 @@ class PriceCheckSchedulerTest {
     void whenCheckPrices_withScrapingError_thenContinueWithNextProduct() {
         // Given
         when(productRepository.findAll()).thenReturn(Arrays.asList(testProduct1, testProduct2));
+        
+        // Set up tracked products
+        TrackedProduct tp1 = new TrackedProduct();
+        tp1.setCheckIntervalMinutes(5);
+        TrackedProduct tp2 = new TrackedProduct();
+        tp2.setCheckIntervalMinutes(5);
+        
+        when(trackedProductRepository.findByProductId(testProduct1.getId()))
+                .thenReturn(Collections.singletonList(tp1));
+        when(trackedProductRepository.findByProductId(testProduct2.getId()))
+                .thenReturn(Collections.singletonList(tp2));
+                
         when(scraperService.scrapePrice(testProduct1.getProductUrl()))
             .thenThrow(new RuntimeException("Scraping failed"));
         when(scraperService.scrapePrice(testProduct2.getProductUrl()))
@@ -184,6 +200,8 @@ class PriceCheckSchedulerTest {
     void whenCheckPrices_withNoPriceChange_thenDoNotUpdate() {
         // Given
         when(productRepository.findAll()).thenReturn(Collections.singletonList(testProduct1));
+        when(trackedProductRepository.findByProductId(testProduct1.getId()))
+                .thenReturn(Collections.singletonList(trackedProduct));
         when(scraperService.scrapePrice(testProduct1.getProductUrl()))
             .thenReturn(Optional.of(testProduct1.getLastCheckedPrice()));
         
@@ -210,6 +228,8 @@ class PriceCheckSchedulerTest {
         
         // Set up mocks
         when(productRepository.findAll()).thenReturn(Collections.singletonList(testProduct1));
+        when(trackedProductRepository.findByProductId(testProduct1.getId()))
+                .thenReturn(Collections.singletonList(trackedProduct));
         when(scraperService.scrapePrice(testProduct1.getProductUrl())).thenReturn(Optional.of(newPrice));
         
         // WHEN
@@ -218,5 +238,21 @@ class PriceCheckSchedulerTest {
         // THEN
         verify(productRepository).save(any(Product.class));
         verify(priceHistoryRepository).save(any(PriceHistory.class));
+    }
+    
+    @Test
+    void whenCheckPrices_withNoTrackedProducts_thenSkipCheck() {
+        // Given
+        when(productRepository.findAll()).thenReturn(Collections.singletonList(testProduct1));
+        when(trackedProductRepository.findByProductId(testProduct1.getId()))
+                .thenReturn(Collections.emptyList());
+        
+        // When
+        priceCheckScheduler.checkPrices();
+        
+        // Then
+        verify(scraperService, never()).scrapePrice(any());
+        verify(productRepository, never()).save(any());
+        verify(priceHistoryRepository, never()).save(any());
     }
 } 

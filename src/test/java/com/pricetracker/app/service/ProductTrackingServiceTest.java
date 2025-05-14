@@ -77,7 +77,7 @@ class ProductTrackingServiceTest {
     @Test
     void whenAddProductTracking_withNewProduct_thenCreateProductAndTracking() {
         // Given
-        TrackProductRequest request = new TrackProductRequest(PRODUCT_URL, DESIRED_PRICE);
+        TrackProductRequest request = new TrackProductRequest(PRODUCT_URL, DESIRED_PRICE, 60);
         
         when(productRepository.findByProductUrl(PRODUCT_URL)).thenReturn(Optional.empty());
         when(scraperService.scrapeProductDetails(PRODUCT_URL)).thenReturn(Optional.of(testProductDetails));
@@ -102,7 +102,7 @@ class ProductTrackingServiceTest {
     @Test
     void whenAddProductTracking_withExistingProduct_thenOnlyCreateTracking() {
         // Given
-        TrackProductRequest request = new TrackProductRequest(PRODUCT_URL, DESIRED_PRICE);
+        TrackProductRequest request = new TrackProductRequest(PRODUCT_URL, DESIRED_PRICE, 60);
         
         when(productRepository.findByProductUrl(PRODUCT_URL)).thenReturn(Optional.of(testProduct));
         when(trackedProductRepository.existsByUserIdAndProductId(USER_ID, testProduct.getId())).thenReturn(false);
@@ -121,7 +121,7 @@ class ProductTrackingServiceTest {
     @Test
     void whenAddProductTracking_withAlreadyTrackedProduct_thenThrowException() {
         // Given
-        TrackProductRequest request = new TrackProductRequest(PRODUCT_URL, DESIRED_PRICE);
+        TrackProductRequest request = new TrackProductRequest(PRODUCT_URL, DESIRED_PRICE, 60);
         
         when(productRepository.findByProductUrl(PRODUCT_URL)).thenReturn(Optional.of(testProduct));
         when(trackedProductRepository.existsByUserIdAndProductId(USER_ID, testProduct.getId())).thenReturn(true);
@@ -153,7 +153,8 @@ class ProductTrackingServiceTest {
         // Given
         UpdateTrackedProductRequest request = new UpdateTrackedProductRequest(
             new BigDecimal("89.99"),
-            false
+            false,
+            60
         );
         
         when(trackedProductRepository.findByIdAndUserId(testTrackedProduct.getId(), USER_ID))
@@ -172,7 +173,7 @@ class ProductTrackingServiceTest {
     @Test
     void whenUpdateTrackedProduct_withNonexistentId_thenThrowException() {
         // Given
-        UpdateTrackedProductRequest request = new UpdateTrackedProductRequest(DESIRED_PRICE, true);
+        UpdateTrackedProductRequest request = new UpdateTrackedProductRequest(DESIRED_PRICE, true, 60);
         
         when(trackedProductRepository.findByIdAndUserId(99L, USER_ID)).thenReturn(Optional.empty());
         

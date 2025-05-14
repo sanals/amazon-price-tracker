@@ -15,6 +15,8 @@ public record TrackedProductResponse(
     
     Boolean notificationEnabled,
     
+    Integer checkIntervalMinutes,
+    
     Instant createdAt,
     
     Instant updatedAt

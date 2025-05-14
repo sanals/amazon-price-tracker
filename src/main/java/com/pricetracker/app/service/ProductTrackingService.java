@@ -44,6 +44,13 @@ public class ProductTrackingService {
         trackedProduct.setDesiredPrice(request.desiredPrice());
         trackedProduct.setNotificationEnabled(true); // Default to enabled
         
+        // Set check interval if provided, otherwise use default (60 minutes)
+        if (request.checkIntervalMinutes() != null) {
+            // Enforce minimum 5 minutes
+            int interval = Math.max(request.checkIntervalMinutes(), 5);
+            trackedProduct.setCheckIntervalMinutes(interval);
+        }
+        
         return trackedProductRepository.save(trackedProduct);
     }
     
@@ -83,6 +90,11 @@ public class ProductTrackingService {
         }
         if (request.notificationEnabled() != null) {
             trackedProduct.setNotificationEnabled(request.notificationEnabled());
+        }
+        if (request.checkIntervalMinutes() != null) {
+            // Enforce minimum 5 minutes
+            int interval = Math.max(request.checkIntervalMinutes(), 5);
+            trackedProduct.setCheckIntervalMinutes(interval);
         }
         
         return trackedProductRepository.save(trackedProduct);

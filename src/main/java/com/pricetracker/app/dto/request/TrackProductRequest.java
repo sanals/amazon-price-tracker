@@ -16,5 +16,8 @@ public record TrackProductRequest(
     
     @NotNull(message = "Desired price is required")
     @DecimalMin(value = "0.01", message = "Desired price must be greater than zero")
-    BigDecimal desiredPrice
+    BigDecimal desiredPrice,
+    
+    @DecimalMin(value = "5", message = "Check interval must be at least 5 minutes")
+    Integer checkIntervalMinutes
 ) {} 

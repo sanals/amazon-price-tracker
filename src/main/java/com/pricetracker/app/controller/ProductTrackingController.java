@@ -167,6 +167,7 @@ public class ProductTrackingController {
             productResponse,
             trackedProduct.getDesiredPrice(),
             trackedProduct.isNotificationEnabled(),
+            trackedProduct.getCheckIntervalMinutes(),
             trackedProduct.getCreatedAt(),
             trackedProduct.getUpdatedAt()
         );

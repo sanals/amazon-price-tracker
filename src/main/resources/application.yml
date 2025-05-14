@@ -53,7 +53,7 @@ logging:
 app:
   base-url: http://localhost:8090/api/v1
   scheduling:
-    checkRateMs: 300000  # 5 minutes in milliseconds (increased from 1 minute)
+    checkRateMs: 60000  # 1 minute in milliseconds (scheduler frequency)
   scraper:
     default-delay-ms: 3000  # Increased to 3 seconds delay between requests
     user-agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"  # More realistic user agent
